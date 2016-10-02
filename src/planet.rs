@@ -1,365 +1,103 @@
-use std::ops::Deref;
 use std::sync::Arc;
-use std::time::Instant;
 
-use chan::{self, Receiver, Sender};
-use glium::{self, Frame, DrawParameters, IndexBuffer, Program, Surface, VertexBuffer};
+use glium::{self, Frame, DrawParameters, Program, Surface};
 use glium::backend::glutin_backend::GlutinFacade;
-use glium::index::PrimitiveType;
 use noise::{self, Seed, Brownian3};
-use num::{Float, Zero};
 use threadpool::ThreadPool;
-use lru_time_cache::LruCache;
 
 use errors::{ChainErr, Result};
-use gfx::{marching_cubes, Camera, Mesh, Vertex};
+use gfx::{Camera, LevelOfDetail};
 use math::{Vec3f, Vector, ScalarField};
 use utils::read_utf8_file;
 
-pub struct TerrainField {
-    seed: Seed,
+
+#[derive(Clone, Debug)]
+pub struct PlanetSpec {
+    pub base_radius: f32,
+    pub landscape_deviation: f32,
+    pub num_octaves: usize,
+    pub persistence: f32,
+    pub wavelength: f32,
+    pub lacunarity: f32,
 }
 
-impl TerrainField {
-    pub fn new(seed: u32) -> Self {
-        TerrainField { seed: Seed::new(seed) }
+impl Default for PlanetSpec {
+    fn default() -> Self {
+        PlanetSpec {
+            base_radius: 32.0,
+            landscape_deviation: 0.4,
+            num_octaves: 12,
+            persistence: 0.8,
+            wavelength: 7.0,
+            lacunarity: 1.91,
+        }
     }
 }
 
-impl ScalarField for TerrainField {
+pub struct PlanetField {
+    seed: Seed,
+    spec: PlanetSpec,
+}
+
+impl PlanetField {
+    pub fn new(seed: u32, planet_spec: PlanetSpec) -> Self {
+        PlanetField {
+            seed: Seed::new(seed),
+            spec: planet_spec,
+        }
+    }
+}
+
+impl ScalarField for PlanetField {
     #[inline]
     fn value_at(&self, x: f32, y: f32, z: f32) -> f32 {
-        // let x = x + noise::perlin3(&self.seed, &[y, z, x]) / 5.0;
-        // let y = y + noise::perlin3(&self.seed, &[z, x, y]) / 5.0;
-        // let z = z + noise::perlin3(&self.seed, &[x, y, z]) / 5.0;
+        let PlanetField { ref seed, ref spec } = *self;
 
-        let scale = 45.0;
-        let mut pos = Vec3f::new(x / scale, y / scale, z / scale);
-        let distance = pos.norm();
-        pos.normalize();
+        let mut position = Vec3f::new(x, y, z);
+        let distance = position.norm();
+        position.normalize();
 
-        let noise = Brownian3::new(noise::open_simplex3, 11)
-            .persistence(0.753)
-            .wavelength(2.1)
-            .lacunarity(1.752);
-        let height = noise.apply(&self.seed, &pos.array()) / 2.0;
+        let mountains = Brownian3::new(noise::open_simplex3, spec.num_octaves)
+            .persistence(spec.persistence)
+            .wavelength(spec.wavelength)
+            .lacunarity(spec.lacunarity);
+        let plains = Brownian3::new(noise::open_simplex3, 3)
+            .persistence(0.95)
+            .wavelength(3.0)
+            .lacunarity(1.5);
+        let mix = Brownian3::new(noise::open_simplex3, 2).wavelength(2.0);
 
-        // let a = 0.45;
-        // sample * 1.0 / (1.0 + scale * x.norm())
-        // println!("{}", sample);
-        distance + height
-        // if distance < height {
-        //     // let noise = Brownian3::new(noise::open_simplex3, 3)
-        //     //     .persistence(0.7)
-        //     //     .wavelength(10.0)
-        //     //     .lacunarity(2.0);
-        //     // let a = (1.5 + noise.apply(&self.seed, &[y, x, z])) / 2.5;
-        //     // println!("{}", distance);
-        //     // a / (distance + 1e-2)
-        //     // (0.5 + height - distance) * a
-
-        //     1.0
-        // } else {
-        //     0.0
-        // }
-    }
-}
-
-struct Octree {
-    nodes: Vec<OctreeNode>,
-    node_stack: Vec<usize>,
-}
-
-impl Octree {
-    pub fn new(position: Vec3f, size: f32) -> Self {
-        let mut octree = Octree {
-            nodes: vec![OctreeNode::new(position, size, 0)],
-            node_stack: vec![],
-        };
-        octree.rebuild(0, position);
-        octree
-    }
-
-    fn rebuild(&mut self, max_level: u8, focus: Vec3f) -> Vec<ChunkId> {
-        assert!(self.node_stack.is_empty());
-        self.nodes.truncate(1);
-        self.node_stack.push(0);
-        Octree::extend_node(&mut self.node_stack, &mut self.nodes, max_level, focus);
-
-        let mut chunk_ids = vec![];
-        for node in self.nodes.iter() {
-            // if node.children.iter().all(Option::is_some) {
-            //     if let Some(chunk_id) = node.chunk {
-            //         chunk_ids.push(chunk_id);
-            //     }
-            // }
-
-            if node.children == [None; 8] {
-                if let Some(chunk_id) = node.chunk {
-                    chunk_ids.push(chunk_id);
-                }
-            }
-        }
-        chunk_ids
-    }
-
-    fn extend_node(node_stack: &mut Vec<usize>,
-                   nodes: &mut Vec<OctreeNode>,
-                   max_level: u8,
-                   focus: Vec3f) {
-        while !node_stack.is_empty() {
-            // println!("stack: {:?}", node_stack);
-            // println!(" ^ current node: {:?}",
-            //          nodes[node_stack[node_stack.len() - 1]]);
-            let current_index = node_stack.pop().expect("unexpected empty node stack");
-            let OctreeNode { size, position, level, .. } = nodes[current_index];
-            let chunk_id = Octree::chunk_id(&position, size);
-            nodes[current_index].chunk = Some(chunk_id);
-            // println!("level: {:?} / {} - {:?}", level, max_level, chunk_id);
-
-            if size <= 1.0 || level >= max_level ||
-               (position + (size / 2.0) - focus).norm() > 4.0.max(size) {
-            } else {
-                let (children_positions, child_size) = Octree::children_positions(&position, size);
-                for (child_index, &child_position) in children_positions.into_iter().enumerate() {
-                    nodes.push(OctreeNode::new(child_position, child_size, level + 1));
-                    let child_global_index = nodes.len() - 1;
-                    nodes[current_index].children[child_index] = Some(child_global_index);
-                    node_stack.push(child_global_index);
-                }
-            }
-        }
-    }
-
-    #[inline]
-    fn chunk_id(position: &Vec3f, size: f32) -> ChunkId {
-        (position[0].floor() as i32,
-         position[1].floor() as i32,
-         position[2].floor() as i32,
-         size as u32)
-    }
-
-    #[inline]
-    fn children_positions(position: &Vec3f, size: f32) -> ([Vec3f; 8], f32) {
-        let child_size = size / 2.0;
-        let make_position = |position: &Vec3f, offset: (f32, f32, f32)| -> Vec3f {
-            Vec3f::new(position[0] + child_size * offset.0,
-                       position[1] + child_size * offset.1,
-                       position[2] + child_size * offset.2)
-        };
-        let positions = [make_position(position, OCTREE_OFFSETS[0]),
-                         make_position(position, OCTREE_OFFSETS[1]),
-                         make_position(position, OCTREE_OFFSETS[2]),
-                         make_position(position, OCTREE_OFFSETS[3]),
-                         make_position(position, OCTREE_OFFSETS[4]),
-                         make_position(position, OCTREE_OFFSETS[5]),
-                         make_position(position, OCTREE_OFFSETS[6]),
-                         make_position(position, OCTREE_OFFSETS[7])];
-        (positions, child_size)
-    }
-}
-
-#[derive(Clone, Debug)]
-struct OctreeNode {
-    position: Vec3f,
-    size: f32,
-    level: u8,
-    chunk: Option<ChunkId>,
-    children: [Option<usize>; 8],
-}
-
-impl OctreeNode {
-    fn new(position: Vec3f, size: f32, level: u8) -> Self {
-        OctreeNode {
-            level: level,
-            position: position,
-            size: size,
-            chunk: None,
-            children: [None; 8],
-        }
-    }
-}
-
-type ChunkId = (i32, i32, i32, u32);
-const OCTREE_OFFSETS: [(f32, f32, f32); 8] = [(0.0, 0.0, 0.0),
-                                              (0.0, 0.0, 1.0),
-                                              (0.0, 1.0, 0.0),
-                                              (1.0, 0.0, 0.0),
-                                              (0.0, 1.0, 1.0),
-                                              (1.0, 0.0, 1.0),
-                                              (1.0, 1.0, 0.0),
-                                              (1.0, 1.0, 1.0)];
-
-struct LevelOfDetail<'a, 'b, Field: ScalarField> {
-    facade: &'a GlutinFacade,
-    thread_pool: &'b ThreadPool,
-    chunk_send: Sender<(ChunkId, Chunk)>,
-    chunk_recv: Receiver<(ChunkId, Chunk)>,
-    scalar_field: Arc<Field>,
-    level: usize,
-    step: f32,
-    size: f32,
-    chunks: LruCache<ChunkId, Option<BufferedChunk>>,
-    empty_chunks: LruCache<ChunkId, ()>,
-}
-
-impl<'a, 'b, Field: 'static + ScalarField + Send + Sync> LevelOfDetail<'a, 'b, Field> {
-    fn new(scalar_field: Arc<Field>,
-           thread_pool: &'b ThreadPool,
-           facade: &'a GlutinFacade,
-           level: usize,
-           step: f32,
-           size: f32)
-           -> Self {
-        let (send, recv) = chan::sync(128);
-        LevelOfDetail {
-            thread_pool: thread_pool,
-            facade: facade,
-            chunk_send: send,
-            chunk_recv: recv,
-            scalar_field: scalar_field,
-            level: level,
-            step: step,
-            size: size,
-            chunks: LruCache::with_capacity(1024),
-            empty_chunks: LruCache::with_capacity(65536),
-        }
-    }
-
-    pub fn update<R>(&mut self, camera: &Camera, mut render: R) -> Result<()>
-        where R: FnMut(&VertexBuffer<Vertex>, &IndexBuffer<u32>) -> Result<()>
-    {
-        let mut octree = Octree::new(Vec3f::zero() - 32.0, 64.0);
-        let chunk_ids = octree.rebuild(6, camera.position);
-        {
-            let LevelOfDetail { ref chunk_send,
-                                ref mut chunks,
-                                ref mut empty_chunks,
-                                ref scalar_field,
-                                ref thread_pool,
-                                .. } = *self;
-
-            for &chunk_id in chunk_ids.iter().filter(|&x| !empty_chunks.contains_key(x)) {
-                chunks.entry(chunk_id).or_insert_with(|| {
-                    let position =
-                        Vec3f::new(chunk_id.0 as f32, chunk_id.1 as f32, chunk_id.2 as f32);
-                    let chunk_size = chunk_id.3 as f32;
-
-                    let num_steps = 17.0;
-                    let step_size = chunk_size / num_steps;
-                    let scalar_field = scalar_field.clone();
-                    let sender = chunk_send.clone();
-                    thread_pool.execute(move || {
-                        let chunk = Chunk::new(scalar_field.deref(),
-                                               position,
-                                               chunk_size + step_size,
-                                               step_size,
-                                               0.5)
-                            .unwrap();
-                        sender.send((chunk_id, chunk));
-                    });
-                    None
-                });
-            }
+        let mut perturbation = 0.0;
+        let mut alpha = (1.0 + mix.apply(&self.seed, &(position * 3.0 + 10.0).array())) / 2.0;
+        let u = spec.landscape_deviation * spec.base_radius * 0.01;
+        if alpha > 0.45 && alpha < 0.55 {
+            alpha = (alpha - 0.45) * 10.0;
+            perturbation = alpha * (mountains.apply(&self.seed, &(position * 4.0).array()) + u) +
+                           (1.0 - alpha) * plains.apply(&self.seed, &(position).array());
+        } else if alpha < 0.45 {
+            perturbation = plains.apply(&self.seed, &(position).array());
+        } else {
+            perturbation = mountains.apply(&self.seed, &(position * 4.0).array()) + u;
         }
 
-        while let Some((chunk_id, chunk)) = (|| {
-            let chunk_recv = &self.chunk_recv;
-
-            chan_select! {
-                default => { return None; },
-                chunk_recv.recv() -> maybe_chunk => { return maybe_chunk; },
-            }
-        })() {
-            info!("Received chunk with {} vertices.",
-                  chunk.mesh.vertices.len());
-            if chunk.mesh.vertices.len() > 0 {
-                try!(self.add_chunk(chunk_id, chunk));
-            } else {
-                self.chunks.remove(&chunk_id);
-                let mut chunk_id = chunk_id;
-                self.empty_chunks.insert(chunk_id, ());
-                chunk_id.3 /= 2;
-                self.empty_chunks.insert(chunk_id, ());
-                chunk_id.3 /= 2;
-                self.empty_chunks.insert(chunk_id, ());
-                chunk_id.3 /= 2;
-                self.empty_chunks.insert(chunk_id, ());
-                chunk_id.3 /= 2;
-                self.empty_chunks.insert(chunk_id, ());
-            }
-        }
-
-        for chunk_id in chunk_ids.iter() {
-            if let Some(&Some(ref buffer)) = self.chunks.get(chunk_id) {
-                try!(render(&buffer.vertex_buffer, &buffer.index_buffer));
-            }
-        }
-        Ok(())
-    }
-
-    fn add_chunk(&mut self, chunk_id: ChunkId, chunk: Chunk) -> Result<()> {
-        let vertex_buffer = try!(VertexBuffer::new(self.facade, &chunk.mesh.vertices)
-            .chain_err(|| "Cannot create vertex buffer."));
-        let index_buffer = try!(IndexBuffer::new(self.facade,
-                                                 PrimitiveType::TrianglesList,
-                                                 &chunk.mesh.indices)
-            .chain_err(|| "Cannot create index buffer."));
-        let buffer = BufferedChunk {
-            chunk: chunk,
-            vertex_buffer: vertex_buffer,
-            index_buffer: index_buffer,
-        };
-        self.chunks.insert(chunk_id, Some(buffer));
-        Ok(())
+        let radius = spec.base_radius + spec.landscape_deviation * spec.base_radius * perturbation;
+        (distance - radius)
     }
 }
 
-#[derive(Clone, Debug)]
-struct Chunk {
-    mesh: Mesh,
-}
-
-impl Chunk {
-    fn new<Field>(scalar_field: &Field,
-                  position: Vec3f,
-                  size: f32,
-                  step: f32,
-                  iso_value: f32)
-                  -> Result<Self>
-        where Field: ScalarField
-    {
-        let time = Instant::now();
-        let p = position + size;
-        let mesh = marching_cubes(scalar_field, &position, &p, step, iso_value);
-        let elapsed = time.elapsed();
-        let delta = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 * 1e-9;
-        info!("Took {:.2}s to create chunk at {:?} (size {:?}) from field ({:?} vertices)",
-              delta,
-              position,
-              size,
-              mesh.vertices.len());
-
-        Ok(Chunk { mesh: mesh })
-    }
-}
-
-struct BufferedChunk {
-    chunk: Chunk,
-    index_buffer: IndexBuffer<u32>,
-    vertex_buffer: VertexBuffer<Vertex>,
-}
-
-pub struct Planet<'a, 'b, 'c, Field: ScalarField> {
-    lod: LevelOfDetail<'a, 'b, Field>,
-    draw_parameters: DrawParameters<'c>,
+pub struct PlanetRenderer<'a, 'b, Field: ScalarField> {
+    lod: LevelOfDetail<'a, Field>,
+    draw_parameters: DrawParameters<'b>,
     program: Program,
+    scalar_field: Arc<Field>,
 }
 
-impl<'a, 'b, 'c, Field: 'static + ScalarField + Send + Sync> Planet<'a, 'b, 'c, Field> {
+impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
+    where Field: 'static + ScalarField + Send + Sync
+{
     pub fn new(scalar_field: Field,
                facade: &'a GlutinFacade,
-               thread_pool: &'b ThreadPool)
+               thread_pool: &'a ThreadPool)
                -> Result<Self> {
 
         let vertex_shader = try!(read_utf8_file(VERTEX_SHADER));
@@ -369,7 +107,7 @@ impl<'a, 'b, 'c, Field: 'static + ScalarField + Send + Sync> Planet<'a, 'b, 'c, 
                 .chain_err(|| "Could not compile the shaders."));
 
         let scalar_field = Arc::new(scalar_field);
-        let lod = LevelOfDetail::new(scalar_field.clone(), thread_pool, facade, 0, 16.0, 16.0);
+        let lod = LevelOfDetail::new(scalar_field.clone(), thread_pool, facade, 16, 16.0, 16.0);
 
         let params = glium::DrawParameters {
             depth: glium::Depth {
@@ -377,44 +115,26 @@ impl<'a, 'b, 'c, Field: 'static + ScalarField + Send + Sync> Planet<'a, 'b, 'c, 
                 write: true,
                 ..Default::default()
             },
-            backface_culling: glium::draw_parameters::BackfaceCullingMode::CullingDisabled,
+            backface_culling: glium::draw_parameters::BackfaceCullingMode::CullClockwise,
             ..Default::default()
         };
 
-        Ok(Planet {
+        Ok(PlanetRenderer {
             lod: lod,
             draw_parameters: params,
             program: program,
+            scalar_field: scalar_field,
         })
     }
 
     pub fn render(&mut self, frame: &mut Frame, camera: &Camera) -> Result<()> {
-        let model = [[1.0, 0.0, 0.0, 0.0],
-                     [0.0, 1.0, 0.0, 0.0],
-                     [0.0, 0.0, 1.0, 0.0],
-                     [0.0, 0.0, 0.0, 1.0f32]];
         let view = camera.view_matrix();
 
-        let perspective = {
-            let (width, height) = frame.get_dimensions();
-            let aspect_ratio = height as f32 / width as f32;
-
-            let fov: f32 = 3.141592 / 3.0;
-            let zfar = 1024.0;
-            let znear = 0.1;
-
-            let f = 1.0 / (fov / 2.0).tan();
-
-            [[f * aspect_ratio, 0.0, 0.0, 0.0],
-             [0.0, f, 0.0, 0.0],
-             [0.0, 0.0, (zfar + znear) / (zfar - znear), 1.0],
-             [0.0, 0.0, -(2.0 * zfar * znear) / (zfar - znear), 0.0]]
-        };
-        let light = [-20.0f32, 0.0, -50.0];
+        let light = [-40.0f32, 0.0, -60.0];
 
         let uniforms = uniform! {
-            perspective: perspective,
-            model: model,
+            perspective: PlanetRenderer::<Field>::perspective_matrix(frame),
+            model: PlanetRenderer::<Field>::model_matrix(),
             view: view,
             u_light: light,
         };
@@ -431,6 +151,30 @@ impl<'a, 'b, 'c, Field: 'static + ScalarField + Send + Sync> Planet<'a, 'b, 'c, 
         }));
 
         Ok(())
+    }
+
+    #[cfg_attr(rustfmt, rustfmt_skip)]
+    fn model_matrix() -> [[f32; 4]; 4] {
+        [[1.0, 0.0, 0.0, 0.0],
+         [0.0, 1.0, 0.0, 0.0],
+         [0.0, 0.0, 1.0, 0.0],
+         [0.0, 0.0, 0.0, 1.0f32]]
+    }
+
+    fn perspective_matrix(frame: &Frame) -> [[f32; 4]; 4] {
+        let (width, height) = frame.get_dimensions();
+        let aspect_ratio = height as f32 / width as f32;
+
+        let fov: f32 = 3.141592 / 3.0;
+        let zfar = 256.0;
+        let znear = 1e-5;
+
+        let f = 1.0 / (fov / 2.0).tan();
+
+        [[f * aspect_ratio, 0.0, 0.0, 0.0],
+         [0.0, f, 0.0, 0.0],
+         [0.0, 0.0, (zfar + znear) / (zfar - znear), 1.0],
+         [0.0, 0.0, -(2.0 * zfar * znear) / (zfar - znear), 0.0]]
     }
 }
 

@@ -1,18 +1,15 @@
 use std::time::Instant;
 
-use glium::{self, DisplayBuild, IndexBuffer, Surface, VertexBuffer};
+use glium::{DisplayBuild, Surface};
 use glium::glutin::{CursorState, Event, WindowBuilder};
 use glium::backend::glutin_backend::GlutinFacade;
-use rand::{self, Rng};
 use threadpool::ThreadPool;
 
 use errors::{ChainErr, Result};
-use utils::read_utf8_file;
-use math::{Vector, Vec3f};
 use super::camera::Camera;
-use super::marching_cubes::marching_cubes;
 
-use planet::{TerrainField, Planet};
+use planet::{PlanetField, PlanetRenderer};
+
 
 pub struct App {
     facade: GlutinFacade,
@@ -39,21 +36,16 @@ impl App {
         })
     }
 
-    pub fn run(&mut self) -> Result<()> {
-        // let ref cube = try!(mesh::load_mesh_from_file("assets/teapot.obj")
-        //     .chain_err(|| "Couldn't load asset."))[0];
-
-        let mut rng = rand::thread_rng();
-        let x: u32 = rng.gen();
-        info!("world_seed = {}", x);
-        let field = TerrainField::new(x);
-        let mut planet = try!(Planet::new(field, &self.facade, &self.thread_pool));
+    pub fn run(&mut self, planet_field: PlanetField) -> Result<()> {
+        let mut planet = try!(PlanetRenderer::new(planet_field, &self.facade, &self.thread_pool));
+        // let mut cubemap_renderer = try!(CubemapRenderer::new());
 
         loop {
+            let time = Instant::now();
+
             let mut target = self.facade.draw();
             target.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
 
-            let time = Instant::now();
             try!(planet.render(&mut target, &self.camera));
             try!(target.finish()
                 .chain_err(|| "Could not render frame."));

@@ -1,4 +1,4 @@
-use num::{Float, Zero, FromPrimitive, ToPrimitive};
+use num::{Float, Zero, FromPrimitive};
 
 use math::{ScalarField, Vector, Vec3f};
 use super::mesh::{Mesh, Vertex, triangle_normal};

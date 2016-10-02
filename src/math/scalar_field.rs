@@ -1,4 +1,4 @@
-const EPS: f32 = 1e-2;
+const EPS: f32 = 1e-4;
 
 pub trait ScalarField {
     #[inline]

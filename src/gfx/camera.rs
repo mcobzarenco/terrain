@@ -1,6 +1,6 @@
 use glium::glutin::{Window, Event, ElementState, VirtualKeyCode};
 
-use math::{Mat4f, Vec3f, Vector};
+use math::{Mat4f, Vec3f, Vec4f, Vector};
 
 #[derive(Debug)]
 pub struct Camera {
@@ -17,12 +17,12 @@ pub struct Camera {
 impl Camera {
     pub fn new() -> Self {
         Camera {
-            position: Vec3f::new(0.0, 0.0, -32.0),
+            position: Vec3f::new(0.0, 0.0, -54.0),
             direction: Vec3f::new(0.0, 0.0, 1.0),
             up: Vec3f::new(0.0, 1.0, 0.0),
             horizontal_angle: 0.0,
             vertical_angle: 0.0,
-            keyboard_speed: 50.0,
+            keyboard_speed: 64.0,
             mouse_speed: 0.1,
         }
     }
@@ -59,6 +59,25 @@ impl Camera {
     pub fn update(&mut self, delta_time: f32, window: &Window, event: Event) -> () {
         match event {
             // Handle keyboard
+            Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Key1)) => {
+                self.keyboard_speed /= 0.5;
+                info!("New keyboard speed: {:?}", self.keyboard_speed);
+            }
+            Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Key2)) => {
+                self.keyboard_speed *= 0.5;
+                info!("New keyboard speed: {:?}", self.keyboard_speed);
+            }
+            // Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Q)) => {
+            //     let rot = Mat4f::new_axis_rotation(&self.direction, delta_time * 3.1415);
+            //     let direction =
+            //         Vec4f::new(self.direction[0], self.direction[1], self.direction[2], 1.0);
+            //     let direction = Vec4f::new(self.up[0], self.up[1], self.up[2], 1.0);
+            //     direction = rot * direction;
+            //     let up = rot * direction;
+            //     self.direction = Vec3f::new(direction[0], direction[1], direction[2]);
+            //     info!("New direction: {:?}", self.direction);
+            //     // self.keyboard_speed /= 0.5;
+            // }
             Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::W)) => {
                 self.position += self.direction * self.keyboard_speed * delta_time;
             }
@@ -84,14 +103,16 @@ impl Camera {
 
                 let vertical_diff = self.mouse_speed * delta_time *
                                     ((height as f32) / 2.0 - y as f32);
-                if (vertical_diff + self.vertical_angle).abs() < 3.14159 / 2.0 {
-                    self.vertical_angle += vertical_diff;
-                }
+                self.vertical_angle += vertical_diff;
+                // if (vertical_diff + self.vertical_angle).abs() < 3.14159 / 2.0 {
+                //     self.vertical_angle += vertical_diff;
+                // }
 
                 self.direction =
                     Vec3f::new(self.vertical_angle.cos() * self.horizontal_angle.sin(),
                                self.vertical_angle.sin(),
-                               self.vertical_angle.cos() * self.horizontal_angle.cos());
+                               self.vertical_angle.cos() * self.horizontal_angle.cos())
+                        .normalized();
 
                 // Right vector
                 let right = Vec3f::new((self.horizontal_angle - 3.14159 / 2.0).sin(),

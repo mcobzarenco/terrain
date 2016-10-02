@@ -1,15 +1,19 @@
 pub mod app;
 pub mod camera;
+pub mod cubemap;
+pub mod lod;
 pub mod marching_cubes;
 pub mod mesh;
 
 pub use self::app::App;
-pub use self::mesh::{Vertex, Mesh};
 pub use self::camera::Camera;
+pub use self::cubemap::CubemapRenderer;
+pub use self::lod::LevelOfDetail;
 pub use self::marching_cubes::marching_cubes;
+pub use self::mesh::{Vertex, Mesh};
 
-use glium::uniforms::{AsUniformValue, UniformValue};
 use glium::texture::{ClientFormat, PixelValue};
+use glium::uniforms::{AsUniformValue, UniformValue};
 use math::{Vec2f, Vec3f, Vec4f, Mat4};
 
 impl AsUniformValue for Mat4 {
