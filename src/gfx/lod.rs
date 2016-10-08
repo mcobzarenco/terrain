@@ -12,7 +12,7 @@ use threadpool::ThreadPool;
 use lru_time_cache::LruCache;
 
 use errors::{ChainErr, Result};
-use gfx::{marching_cubes, Camera, Mesh, Vertex};
+use gfx::{marching_cubes, BarycentricVertex, Camera, Mesh, Vertex};
 use math::{Vec3f, ScalarField};
 
 
@@ -44,7 +44,7 @@ impl<'a, Field: 'static + ScalarField + Send + Sync> LevelOfDetail<'a, Field> {
     }
 
     pub fn update<R>(&mut self, camera: &Camera, render: R) -> Result<()>
-        where R: FnMut(&VertexBuffer<Vertex>, &IndexBuffer<u32>) -> Result<()>
+        where R: FnMut(&VertexBuffer<BarycentricVertex>, &IndexBuffer<u32>) -> Result<()>
     {
         let (draw_chunk_ids, fetch_chunk_ids) = self.octree
             .rebuild(self.max_level, camera.position, &mut self.chunk_renderer);
@@ -54,7 +54,7 @@ impl<'a, Field: 'static + ScalarField + Send + Sync> LevelOfDetail<'a, Field> {
 
 #[derive(Clone, Debug)]
 struct Chunk {
-    mesh: Mesh,
+    mesh: Mesh<BarycentricVertex>,
 }
 
 impl Chunk {
@@ -68,7 +68,8 @@ impl Chunk {
     {
         let time = Instant::now();
         let p = position + size;
-        let mesh = marching_cubes(scalar_field, &position, &p, step, iso_value);
+        let mesh = marching_cubes(scalar_field, &position, &p, step, iso_value)
+            .with_barycentric_coordinates();
         let elapsed = time.elapsed();
         let delta = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 * 1e-9;
         info!("Took {:.2}s to create chunk at {:?} (size {:?}) from field ({:?} vertices)",
@@ -83,7 +84,7 @@ impl Chunk {
 
 struct BufferedChunk {
     index_buffer: IndexBuffer<u32>,
-    vertex_buffer: VertexBuffer<Vertex>,
+    vertex_buffer: VertexBuffer<BarycentricVertex>,
 }
 
 struct Octree {
@@ -266,7 +267,7 @@ impl ChunkId {
     }
 }
 
-const OCTREE_VOXEL_DENSITY: f32 = 32.0;
+const OCTREE_VOXEL_DENSITY: f32 = 65536.0;
 const OCTREE_OFFSETS: [(f32, f32, f32); 8] = [(0.0, 0.0, 0.0),
                                               (0.0, 0.0, 1.0),
                                               (0.0, 1.0, 0.0),
@@ -320,7 +321,7 @@ impl<'a, Field> ChunkRenderer<'a, Field>
                         fetch_chunk_ids: Vec<ChunkId>,
                         mut render: RenderFn)
                         -> Result<()>
-        where RenderFn: FnMut(&VertexBuffer<Vertex>, &IndexBuffer<u32>) -> Result<()>
+        where RenderFn: FnMut(&VertexBuffer<BarycentricVertex>, &IndexBuffer<u32>) -> Result<()>
     {
 
         // The invariant required to hold when calling this function is:
@@ -379,7 +380,7 @@ impl<'a, Field> ChunkRenderer<'a, Field>
             let position = chunk_id.position();
             let chunk_size = chunk_id.size();
 
-            let num_steps = 32.0;
+            let num_steps = 16.0;
             let step_size = chunk_size / num_steps;
             let scalar_field = scalar_field.clone();
             let sender = chunk_send.clone();

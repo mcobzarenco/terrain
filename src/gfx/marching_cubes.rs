@@ -8,7 +8,7 @@ pub fn marching_cubes<Field: ScalarField>(field: &Field,
                                           max: &Vec3f,
                                           step: f32,
                                           iso_value: f32)
-                                          -> Mesh {
+                                          -> Mesh<Vertex> {
     let mut vertices = vec![];
     let mut indices = vec![];
 
@@ -243,7 +243,6 @@ pub fn marching_cubes<Field: ScalarField>(field: &Field,
         name: "test".to_owned(),
         vertices: vertices,
         indices: indices,
-        tex_vertices: vec![],
     }
 }
 

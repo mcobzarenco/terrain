@@ -64,6 +64,14 @@ fn start_app() -> Result<()> {
             .long("lacunarity")
             .value_name("f32")
             .takes_value(true))
+        .arg(Arg::with_name("width")
+            .long("width")
+            .value_name("u32")
+            .takes_value(true))
+        .arg(Arg::with_name("height")
+            .long("height")
+            .value_name("u32")
+            .takes_value(true))
         .get_matches();
 
     let mut planet_spec = PlanetSpec::default();
@@ -86,13 +94,22 @@ fn start_app() -> Result<()> {
         value_t!(matches, "lacunarity", f32).map(|v| planet_spec.lacunarity = v).unwrap();
     }
 
+    let mut width = 1024;
+    let mut height = 768;
+    if matches.is_present("width") {
+        value_t!(matches, "width", u32).map(|v| width = v).unwrap();
+    }
+    if matches.is_present("height") {
+        value_t!(matches, "height", u32).map(|v| height = v).unwrap();
+    }
+
     let mut rng = rand::thread_rng();
     let seed: u32 = rng.gen();
     info!("The world seed is {}", seed);
     info!("Generating planet with params {:?}", planet_spec);
     let field = PlanetField::new(seed, planet_spec);
 
-    let mut app = try!(App::new(3));
+    let mut app = try!(App::new(width, height, 3));
     app.run(field)
 }
 

@@ -249,7 +249,6 @@ pub fn marching_cubes<Field: ScalarField>(field: &Field,
         name: "test".to_owned(),
         vertices: vertices,
         indices: indices,
-        tex_vertices: vec![],
     }
 }
 

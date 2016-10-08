@@ -4,6 +4,7 @@ uniform vec3 u_light;
 
 in vec3 v_normal;
 in vec3 v_pos;
+in vec3 v_bary_coord;
 
 out vec4 color;
 
@@ -225,7 +226,19 @@ vec3 hsv2rgb(vec3 c)
   return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
+float edgeFactor(){
+  vec3 d = fwidth(v_bary_coord);
+  vec3 a3 = smoothstep(vec3(0.0), d*1.5, v_bary_coord);
+  return min(min(a3.x, a3.y), a3.z);
+}
+
 void main() {
+  // float brightness = max(0.2, dot(normalize(v_normal),
+  //                                 normalize(v_pos - u_light)));
+  color.rgb = mix(vec3(0.01), vec3(0.5), edgeFactor());
+}
+
+void main2() {
   float brightness = max(0.02, dot(normalize(v_normal),
                                    normalize(v_pos - u_light)));
   float s = (1.3 + sqrt(dot(v_pos, v_pos))) / 2.3;

@@ -18,9 +18,10 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(num_workers: usize) -> Result<Self> {
+    pub fn new(width: u32, height: u32, num_workers: usize) -> Result<Self> {
         let facade = try!(WindowBuilder::new()
             .with_title("Rusty Terrain")
+            .with_dimensions(width, height)
             .with_depth_buffer(24)
             .build_glium()
             .chain_err(|| "Could not create a Glutin window."));

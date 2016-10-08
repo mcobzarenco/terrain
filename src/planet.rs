@@ -62,9 +62,9 @@ impl ScalarField for PlanetField {
             .wavelength(spec.wavelength)
             .lacunarity(spec.lacunarity);
         let plains = Brownian3::new(noise::open_simplex3, 3)
-            .persistence(0.95)
+            .persistence(0.9)
             .wavelength(3.0)
-            .lacunarity(1.5);
+            .lacunarity(1.8);
         let mix = Brownian3::new(noise::open_simplex3, 2).wavelength(2.0);
 
         let mut perturbation = 0.0;
@@ -166,7 +166,7 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
         let aspect_ratio = height as f32 / width as f32;
 
         let fov: f32 = 3.141592 / 3.0;
-        let zfar = 256.0;
+        let zfar = 512.0;
         let znear = 1e-5;
 
         let f = 1.0 / (fov / 2.0).tan();
