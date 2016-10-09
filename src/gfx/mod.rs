@@ -14,23 +14,23 @@ pub use self::mesh::{BarycentricVertex, Vertex, Mesh};
 
 use glium::texture::{ClientFormat, PixelValue};
 use glium::uniforms::{AsUniformValue, UniformValue};
-use math::{Vec2f, Vec3f, Vec4f, Mat4};
+use math::{Matrix4f, Vec2f, Vec3f, Vec4f};
 
-impl AsUniformValue for Mat4 {
+impl AsUniformValue for Matrix4f {
     fn as_uniform_value(&self) -> UniformValue {
-        UniformValue::Mat4([[self[0][0], self[0][1], self[0][2], self[0][3]],
-                            [self[1][0], self[1][1], self[1][2], self[1][3]],
-                            [self[2][0], self[2][1], self[2][2], self[2][3]],
-                            [self[3][0], self[3][1], self[3][2], self[3][3]]])
+        UniformValue::Mat4([[self[(0, 0)], self[(1, 0)], self[(2, 0)], self[(3, 0)]],
+                            [self[(0, 1)], self[(1, 1)], self[(2, 1)], self[(3, 1)]],
+                            [self[(0, 2)], self[(1, 2)], self[(2, 2)], self[(3, 2)]],
+                            [self[(0, 3)], self[(1, 3)], self[(2, 3)], self[(3, 3)]]])
     }
 }
 
-impl<'a> AsUniformValue for &'a Mat4 {
+impl<'a> AsUniformValue for &'a Matrix4f {
     fn as_uniform_value(&self) -> UniformValue {
-        UniformValue::Mat4([[self[0][0], self[0][1], self[0][2], self[0][3]],
-                            [self[1][0], self[1][1], self[1][2], self[1][3]],
-                            [self[2][0], self[2][1], self[2][2], self[2][3]],
-                            [self[3][0], self[3][1], self[3][2], self[3][3]]])
+        UniformValue::Mat4([[self[(0, 0)], self[(1, 0)], self[(2, 0)], self[(3, 0)]],
+                            [self[(0, 1)], self[(1, 1)], self[(2, 1)], self[(3, 1)]],
+                            [self[(0, 2)], self[(1, 2)], self[(2, 2)], self[(3, 2)]],
+                            [self[(0, 3)], self[(1, 3)], self[(2, 3)], self[(3, 3)]]])
     }
 }
 

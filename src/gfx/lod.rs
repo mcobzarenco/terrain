@@ -47,7 +47,7 @@ impl<'a, Field: 'static + ScalarField + Send + Sync> LevelOfDetail<'a, Field> {
         where R: FnMut(&VertexBuffer<BarycentricVertex>, &IndexBuffer<u32>) -> Result<()>
     {
         let (draw_chunk_ids, fetch_chunk_ids) = self.octree
-            .rebuild(self.max_level, camera.position, &mut self.chunk_renderer);
+            .rebuild(self.max_level, camera.position(), &mut self.chunk_renderer);
         self.chunk_renderer.render(&draw_chunk_ids, fetch_chunk_ids, render)
     }
 }
@@ -391,6 +391,7 @@ impl<'a, Field> ChunkRenderer<'a, Field>
                                        step_size,
                                        0.0)
                     .unwrap();
+                // info!("Chunk: {:?}", chunk);
                 sender.send((chunk_id, chunk));
             });
             pending_chunks.insert(chunk_id);

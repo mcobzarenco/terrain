@@ -1,12 +1,14 @@
 #![recursion_limit = "1024"]
 
 #[macro_use]
+extern crate chan;
+#[macro_use]
 extern crate clap;
+#[macro_use]
+extern crate custom_derive;
 extern crate env_logger;
 #[macro_use]
 extern crate error_chain;
-#[macro_use]
-extern crate chan;
 #[macro_use]
 extern crate glium;
 extern crate image;
@@ -14,12 +16,15 @@ extern crate image;
 extern crate log;
 extern crate lru_time_cache;
 extern crate itertools;
+extern crate nalgebra;
+#[macro_use]
+extern crate newtype_derive;
 extern crate noise;
 extern crate num;
 extern crate rand;
 extern crate rayon;
-extern crate wavefront_obj;
 extern crate threadpool;
+extern crate wavefront_obj;
 
 mod errors;
 mod gfx;
@@ -109,6 +114,7 @@ fn start_app() -> Result<()> {
     info!("Generating planet with params {:?}", planet_spec);
     let field = PlanetField::new(seed, planet_spec);
 
+    info!("Creating app");
     let mut app = try!(App::new(width, height, 3));
     app.run(field)
 }

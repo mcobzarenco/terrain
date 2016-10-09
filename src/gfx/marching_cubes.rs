@@ -1,6 +1,7 @@
 use num::{Float, Zero, FromPrimitive};
 
-use math::{ScalarField, Vector, Vec3f};
+use nalgebra::{Cross, Norm, Vector3};
+use math::{ScalarField, Vec3f};
 use super::mesh::{Mesh, Vertex, triangle_normal};
 
 pub fn marching_cubes<Field: ScalarField>(field: &Field,
@@ -321,7 +322,7 @@ fn intersection_vertex(mut x: f32,
 fn normalized_field_gradient_at_vertex<Field: ScalarField>(field: &ScalarField,
                                                            vertex: &Vec3f)
                                                            -> Vec3f {
-    Vec3f::from_array(field.gradient_at(vertex[0], vertex[1], vertex[2])).normalized()
+    Vec3f::from(Vector3::from(&field.gradient_at(vertex[0], vertex[1], vertex[2])).normalize())
 }
 
 

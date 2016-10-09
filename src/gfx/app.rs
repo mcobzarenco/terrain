@@ -8,8 +8,8 @@ use threadpool::ThreadPool;
 use errors::{ChainErr, Result};
 use super::camera::Camera;
 
+use math::{Point3f, Vec3f};
 use planet::{PlanetField, PlanetRenderer};
-
 
 pub struct App {
     facade: GlutinFacade,
@@ -32,7 +32,9 @@ impl App {
 
         Ok(App {
             facade: facade,
-            camera: Camera::new(),
+            camera: Camera::new(Point3f::new(0.0, 0.0, -54.0),
+                                Point3f::new(0.0, 0.0, 0.0),
+                                Vec3f::new(0.0, 1.0, 0.0)),
             thread_pool: ThreadPool::new(num_workers),
         })
     }

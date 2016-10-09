@@ -1,12 +1,15 @@
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::iter::FromIterator;
-use glium::vertex::{self, Attribute, AttributeType};
+use std::mem::size_of;
+use glium::vertex::{self, Attribute, AttributeType, VertexFormat};
+use nalgebra::{Cross, Norm};
 use num::Zero;
 use wavefront_obj::obj as wavefront_obj;
 
 use errors::*;
 use utils::read_utf8_file;
-use math::{Vec2f, Vec3f, Vector};
+use math::{Vec2f, Vec3f};
 
 pub trait NormalVertex {
     fn position(&self) -> &Vec3f;
@@ -32,6 +35,39 @@ impl NormalVertex for Vertex {
 implement_vertex!(Vertex, position, normal);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
+pub struct VertexWithAttribute<A: Attribute> {
+    pub position: Vec3f,
+    pub normal: Vec3f,
+    pub attribute: A,
+}
+
+impl<A> NormalVertex for VertexWithAttribute<A>
+    where A: Attribute
+{
+    fn position(&self) -> &Vec3f {
+        &self.position
+    }
+
+    fn normal(&self) -> &Vec3f {
+        &self.normal
+    }
+}
+
+impl<A> vertex::Vertex for VertexWithAttribute<A>
+    where A: Attribute + Copy
+{
+    fn build_bindings() -> VertexFormat {
+        let position_ix = size_of::<Vec3f>();
+        let normal_ix = position_ix + size_of::<Vec3f>();
+        let attribute_ix = normal_ix + size_of::<A>();
+
+        Cow::Owned(vec![(Cow::Borrowed("position"), position_ix, Vec3f::get_type()),
+                        (Cow::Borrowed("normal"), normal_ix, Vec3f::get_type()),
+                        (Cow::Borrowed("attribute"), attribute_ix, Vec3f::get_type())])
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BarycentricVertex {
     pub position: Vec3f,
     pub normal: Vec3f,
@@ -52,7 +88,7 @@ implement_vertex!(BarycentricVertex, position, normal, bary_coord);
 
 #[inline]
 pub fn triangle_normal(v1: &Vertex, v2: &Vertex, v3: &Vertex) -> Vec3f {
-    (v2.position - v1.position).cross(&(v3.position - v1.position)).normalized()
+    Vec3f::from((v2.position - v1.position).cross(&(v3.position - v1.position)).normalize())
 }
 
 #[derive(Clone, Debug, PartialEq)]

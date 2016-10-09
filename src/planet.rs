@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use glium::{self, Frame, DrawParameters, Program, Surface};
 use glium::backend::glutin_backend::GlutinFacade;
+use nalgebra::{Norm, Vector3};
 use noise::{self, Seed, Brownian3};
 use threadpool::ThreadPool;
 
 use errors::{ChainErr, Result};
 use gfx::{Camera, LevelOfDetail};
-use math::{Vec3f, Vector, ScalarField};
+use math::{Vec3f, ScalarField};
 use utils::read_utf8_file;
 
 
@@ -55,7 +56,7 @@ impl ScalarField for PlanetField {
 
         let mut position = Vec3f::new(x, y, z);
         let distance = position.norm();
-        position.normalize();
+        position.normalize_mut();
 
         let mountains = Brownian3::new(noise::open_simplex3, spec.num_octaves)
             .persistence(spec.persistence)
@@ -68,20 +69,23 @@ impl ScalarField for PlanetField {
         let mix = Brownian3::new(noise::open_simplex3, 2).wavelength(2.0);
 
         let mut perturbation = 0.0;
-        let mut alpha = (1.0 + mix.apply(&self.seed, &(position * 3.0 + 10.0).array())) / 2.0;
+        let mut alpha = (1.0 + mix.apply(&self.seed, (position * 3.0 + 10.0).as_ref())) / 2.0;
         let u = spec.landscape_deviation * spec.base_radius * 0.01;
         if alpha > 0.45 && alpha < 0.55 {
             alpha = (alpha - 0.45) * 10.0;
-            perturbation = alpha * (mountains.apply(&self.seed, &(position * 4.0).array()) + u) +
-                           (1.0 - alpha) * plains.apply(&self.seed, &(position).array());
+            perturbation = alpha * (mountains.apply(&self.seed, (position * 4.0).as_ref()) + u) +
+                           (1.0 - alpha) * plains.apply(&self.seed, position.as_ref());
         } else if alpha < 0.45 {
-            perturbation = plains.apply(&self.seed, &(position).array());
+            perturbation = plains.apply(&self.seed, position.as_ref());
         } else {
-            perturbation = mountains.apply(&self.seed, &(position * 4.0).array()) + u;
+            perturbation = mountains.apply(&self.seed, (position * 4.0).as_ref()) + u;
         }
 
         let radius = spec.base_radius + spec.landscape_deviation * spec.base_radius * perturbation;
-        (distance - radius)
+        // distance - radius
+
+        distance - spec.base_radius
+        // y - (x * x + z * z).sqrt().sin()
     }
 }
 
