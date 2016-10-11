@@ -17,6 +17,7 @@ extern crate log;
 extern crate lru_time_cache;
 extern crate itertools;
 extern crate nalgebra;
+extern crate ncollide;
 #[macro_use]
 extern crate newtype_derive;
 extern crate noise;

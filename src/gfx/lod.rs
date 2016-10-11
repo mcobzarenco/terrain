@@ -4,17 +4,18 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chan::{self, Receiver, Sender};
-use glium::{IndexBuffer, VertexBuffer};
 use glium::backend::glutin_backend::GlutinFacade;
 use glium::index::PrimitiveType;
+use glium::{IndexBuffer, VertexBuffer};
+use lru_time_cache::LruCache;
+use ncollide::shape::{ShapeHandle, TriMesh};
+use nalgebra::{Isometry3, Point3, Translation};
 use num::Zero;
 use threadpool::ThreadPool;
-use lru_time_cache::LruCache;
 
 use errors::{ChainErr, Result};
-use gfx::{marching_cubes, BarycentricVertex, Camera, Mesh, Vertex};
-use math::{Vec3f, ScalarField};
-
+use gfx::{marching_cubes, BarycentricVertex, Camera, Mesh};
+use math::{GpuScalar, Vec3f, ScalarField};
 
 pub struct LevelOfDetail<'a, Field>
     where Field: ScalarField
@@ -32,10 +33,14 @@ impl<'a, Field: 'static + ScalarField + Send + Sync> LevelOfDetail<'a, Field> {
                facade: &'a GlutinFacade,
                max_level: u8,
                step: f32,
-               size: f32)
+               size: f32,
+               uid_start: usize)
                -> Self {
         LevelOfDetail {
-            chunk_renderer: ChunkRenderer::new(scalar_field.clone(), thread_pool, facade),
+            chunk_renderer: ChunkRenderer::new(scalar_field.clone(),
+                                               thread_pool,
+                                               facade,
+                                               uid_start),
             octree: Octree::new(Vec3f::zero() - 64.0, 128.0),
             max_level: max_level,
             step: step,
@@ -43,48 +48,63 @@ impl<'a, Field: 'static + ScalarField + Send + Sync> LevelOfDetail<'a, Field> {
         }
     }
 
-    pub fn update<R>(&mut self, camera: &Camera, render: R) -> Result<()>
-        where R: FnMut(&VertexBuffer<BarycentricVertex>, &IndexBuffer<u32>) -> Result<()>
-    {
+    pub fn update(&mut self, camera: &Camera) -> Result<Vec<&Chunk>> {
         let (draw_chunk_ids, fetch_chunk_ids) = self.octree
-            .rebuild(self.max_level, camera.position(), &mut self.chunk_renderer);
-        self.chunk_renderer.render(&draw_chunk_ids, fetch_chunk_ids, render)
+            .rebuild(self.max_level,
+                     Vec3f::from(camera.position().translation()),
+                     &mut self.chunk_renderer);
+        self.chunk_renderer.render(&draw_chunk_ids, fetch_chunk_ids)
     }
 }
 
-#[derive(Clone, Debug)]
-struct Chunk {
-    mesh: Mesh<BarycentricVertex>,
+pub struct Chunk {
+    pub uid: usize,
+    pub tri_mesh: TriMeshHandle,
+    pub index_buffer: IndexBuffer<u32>,
+    pub vertex_buffer: VertexBuffer<BarycentricVertex>,
 }
 
 impl Chunk {
-    fn new<Field>(scalar_field: &Field,
-                  position: Vec3f,
-                  size: f32,
-                  step: f32,
-                  iso_value: f32)
-                  -> Result<Self>
-        where Field: ScalarField
-    {
-        let time = Instant::now();
-        let p = position + size;
-        let mesh = marching_cubes(scalar_field, &position, &p, step, iso_value)
-            .with_barycentric_coordinates();
-        let elapsed = time.elapsed();
-        let delta = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 * 1e-9;
-        info!("Took {:.2}s to create chunk at {:?} (size {:?}) from field ({:?} vertices)",
-              delta,
-              position,
-              size,
-              mesh.vertices.len());
+    fn new(uid: usize,
+           facade: &GlutinFacade,
+           mesh: Mesh<BarycentricVertex>,
+           tri_mesh: TriMeshHandle)
+           -> Result<Self> {
+        let vertex_buffer = try!(VertexBuffer::new(facade, &mesh.vertices)
+            .chain_err(|| "Cannot create vertex buffer."));
+        let index_buffer =
+            try!(IndexBuffer::new(facade, PrimitiveType::TrianglesList, &mesh.indices)
+                .chain_err(|| "Cannot create index buffer."));
 
-        Ok(Chunk { mesh: mesh })
+        Ok(Chunk {
+            uid: uid,
+            tri_mesh: tri_mesh,
+            vertex_buffer: vertex_buffer,
+            index_buffer: index_buffer,
+        })
     }
 }
 
-struct BufferedChunk {
-    index_buffer: IndexBuffer<u32>,
-    vertex_buffer: VertexBuffer<BarycentricVertex>,
+fn field_to_mesh<Field>(scalar_field: &Field,
+                        position: Vec3f,
+                        size: f32,
+                        step: f32,
+                        iso_value: f32)
+                        -> Result<Mesh<BarycentricVertex>>
+    where Field: ScalarField
+{
+    let time = Instant::now();
+    let p = position + size;
+    let mesh = marching_cubes(scalar_field, &position, &p, step, iso_value)
+        .with_barycentric_coordinates();
+    let elapsed = time.elapsed();
+    let delta = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 * 1e-9;
+    info!("Took {:.2}s to create chunk at {:?} (size {:?}) from field ({:?} vertices)",
+          delta,
+          position,
+          size,
+          mesh.vertices.len());
+    Ok(mesh)
 }
 
 struct Octree {
@@ -243,7 +263,7 @@ impl OctreeNode {
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
-struct ChunkId(i32, i32, i32, u32);
+pub struct ChunkId(i32, i32, i32, u32);
 
 impl ChunkId {
     #[inline]
@@ -255,14 +275,14 @@ impl ChunkId {
     }
 
     #[inline]
-    fn position(&self) -> Vec3f {
+    pub fn position(&self) -> Vec3f {
         Vec3f::new(self.0 as f32 / OCTREE_VOXEL_DENSITY,
                    self.1 as f32 / OCTREE_VOXEL_DENSITY,
                    self.2 as f32 / OCTREE_VOXEL_DENSITY)
     }
 
     #[inline]
-    fn size(&self) -> f32 {
+    pub fn size(&self) -> f32 {
         self.3 as f32 / OCTREE_VOXEL_DENSITY
     }
 }
@@ -285,15 +305,19 @@ fn distance_to_cube(cube_position: &Vec3f, size: f32, query: &Vec3f) -> f32 {
     (dx * dx + dy * dy + dz * dz).sqrt()
 }
 
+type TriMeshHandle = ShapeHandle<Point3<GpuScalar>, Isometry3<GpuScalar>>;
+type ChunkRendererWork = (ChunkId, Mesh<BarycentricVertex>, TriMeshHandle);
+
 struct ChunkRenderer<'a, Field: ScalarField> {
     scalar_field: Arc<Field>,
     thread_pool: &'a ThreadPool,
     facade: &'a GlutinFacade,
-    chunk_send: Sender<(ChunkId, Chunk)>,
-    chunk_recv: Receiver<(ChunkId, Chunk)>,
-    loaded_chunks: LruCache<ChunkId, BufferedChunk>,
+    chunk_send: Sender<ChunkRendererWork>,
+    chunk_recv: Receiver<ChunkRendererWork>,
+    loaded_chunks: LruCache<ChunkId, Chunk>,
     pending_chunks: HashSet<ChunkId>,
     empty_chunks: LruCache<ChunkId, ()>,
+    empty_uid: usize,
 }
 
 impl<'a, Field> ChunkRenderer<'a, Field>
@@ -301,7 +325,8 @@ impl<'a, Field> ChunkRenderer<'a, Field>
 {
     fn new(scalar_field: Arc<Field>,
            thread_pool: &'a ThreadPool,
-           facade: &'a GlutinFacade)
+           facade: &'a GlutinFacade,
+           uid_start: usize)
            -> Self {
         let (send, recv) = chan::sync(128);
         ChunkRenderer {
@@ -310,19 +335,17 @@ impl<'a, Field> ChunkRenderer<'a, Field>
             facade: facade,
             chunk_send: send,
             chunk_recv: recv,
-            loaded_chunks: LruCache::with_capacity(8192),
+            loaded_chunks: LruCache::with_capacity(2048),
             pending_chunks: HashSet::with_capacity(128),
             empty_chunks: LruCache::with_capacity(65536),
+            empty_uid: uid_start,
         }
     }
 
-    fn render<RenderFn>(&mut self,
-                        draw_chunk_ids: &Vec<ChunkId>,
-                        fetch_chunk_ids: Vec<ChunkId>,
-                        mut render: RenderFn)
-                        -> Result<()>
-        where RenderFn: FnMut(&VertexBuffer<BarycentricVertex>, &IndexBuffer<u32>) -> Result<()>
-    {
+    fn render(&mut self,
+              draw_chunk_ids: &Vec<ChunkId>,
+              fetch_chunk_ids: Vec<ChunkId>)
+              -> Result<Vec<&Chunk>> {
 
         // The invariant required to hold when calling this function is:
         //   - the meshes for all `draw_chunk_ids` are available
@@ -346,26 +369,18 @@ impl<'a, Field> ChunkRenderer<'a, Field>
                             ref mut empty_chunks,
                             .. } = *self;
 
-        for chunk_id in draw_chunk_ids.iter() {
-            let buffer = loaded_chunks.get(chunk_id)
-                .expect("ChunkRenderer::render was called with a `draw_chunk_id` \
-                         not present in the cache.");
-            try!(render(&buffer.vertex_buffer, &buffer.index_buffer));
-        }
-
-        while let Some((chunk_id, chunk)) = (|| {
+        while let Some((chunk_id, mesh, tri_mesh)) = (|| {
             chan_select! {
                 default => { return None; },
                 chunk_recv.recv() -> maybe_chunk => { return maybe_chunk; },
             }
         })() {
-            info!("Received chunk with {} vertices.",
-                  chunk.mesh.vertices.len());
+            info!("Received chunk with {} vertices.", mesh.vertices.len());
             pending_chunks.remove(&chunk_id);
-            if chunk.mesh.vertices.len() > 0 {
-                let buffered_chunk =
-                    try!(ChunkRenderer::<'a, Field>::buffers_from_chunk(self.facade, chunk));
-                loaded_chunks.insert(chunk_id, buffered_chunk);
+            if mesh.vertices.len() > 0 {
+                loaded_chunks.insert(chunk_id,
+                                     try!(Chunk::new(self.empty_uid, self.facade, mesh, tri_mesh)));
+                self.empty_uid += 1;
             } else {
                 empty_chunks.insert(chunk_id, ());
             }
@@ -385,30 +400,43 @@ impl<'a, Field> ChunkRenderer<'a, Field>
             let scalar_field = scalar_field.clone();
             let sender = chunk_send.clone();
             thread_pool.execute(move || {
-                let chunk = Chunk::new(scalar_field.deref(),
-                                       position,
-                                       chunk_size + step_size,
-                                       step_size,
-                                       0.0)
+                let mesh = field_to_mesh(scalar_field.deref(),
+                                         position,
+                                         chunk_size + step_size,
+                                         step_size,
+                                         0.0)
                     .unwrap();
+                let tri_mesh =
+                    TriMesh::new(Arc::new(mesh.vertices
+                                     .iter()
+                                     .map(|x| x.position.to_point())
+                                     .collect()),
+                                 Arc::new(mesh.indices
+                                     .chunks(3)
+                                     .map(|x| {
+                                         Point3::new(x[0] as usize, x[1] as usize, x[2] as usize)
+                                     })
+                                     .collect()),
+                                 None,
+                                 None);
+
                 // info!("Chunk: {:?}", chunk);
-                sender.send((chunk_id, chunk));
+                sender.send((chunk_id, mesh, ShapeHandle::new(tri_mesh)));
             });
             pending_chunks.insert(chunk_id);
         }
-        Ok(())
-    }
 
-    fn buffers_from_chunk(facade: &GlutinFacade, chunk: Chunk) -> Result<BufferedChunk> {
-        let vertex_buffer = try!(VertexBuffer::new(facade, &chunk.mesh.vertices)
-            .chain_err(|| "Cannot create vertex buffer."));
-        let index_buffer =
-            try!(IndexBuffer::new(facade, PrimitiveType::TrianglesList, &chunk.mesh.indices)
-                .chain_err(|| "Cannot create index buffer."));
-        Ok(BufferedChunk {
-            vertex_buffer: vertex_buffer,
-            index_buffer: index_buffer,
-        })
+        let mut draw_chunks = vec![];
+        for chunk_id in draw_chunk_ids.iter() {
+            if let Some(chunk) = loaded_chunks.peek(chunk_id) {
+                draw_chunks.push(chunk);
+            } else {
+                warn!("A chunk needed to be drawn was evicted after collecting new chunks from \
+                       workers, increase the LRU chunk cache size.");
+            }
+        }
+
+        Ok(draw_chunks)
     }
 }
 
@@ -446,8 +474,8 @@ impl<'a, Field> ChunkCache for ChunkRenderer<'a, Field>
     #[inline]
     fn get_chunk_state(&mut self, chunk_id: &ChunkId) -> ChunkState {
         if self.loaded_chunks.get(chunk_id).is_some() {
-            assert!(!self.empty_chunks.contains_key(chunk_id));
-            assert!(!self.pending_chunks.contains(chunk_id));
+            assert!(!self.empty_chunks.contains_key(chunk_id) &&
+                    !self.pending_chunks.contains(chunk_id));
             ChunkState::Available
         } else if self.empty_chunks.contains_key(chunk_id) {
             assert!(!self.pending_chunks.contains(chunk_id));

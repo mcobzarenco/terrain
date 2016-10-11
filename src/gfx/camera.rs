@@ -88,15 +88,21 @@ impl Camera {
 
                 self.observer
                     .rotation
-                    .append_rotation_mut(&(rotation * (Vector3::x() * -1.0) * vertical_angle +
-                                           rotation * (Vector3::y() * -1.0) * horizontal_angle));
+                    .append_rotation_mut(&(rotation * (Vector3::x() * -1.0) * vertical_angle));
+                self.observer
+                    .rotation
+                    .append_rotation_mut(&(rotation * (Vector3::y() * -1.0) * horizontal_angle));
 
             }
             _ => (),
         }
     }
 
-    pub fn position(&self) -> Vec3f {
-        Vec3f::from(self.observer.translation())
+    pub fn position(&self) -> Isometry3<GpuScalar> {
+        self.observer
+    }
+
+    pub fn observer_mut(&mut self) -> &mut Isometry3<GpuScalar> {
+        &mut self.observer
     }
 }

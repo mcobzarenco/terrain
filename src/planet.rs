@@ -1,16 +1,20 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use glium::{self, Frame, DrawParameters, Program, Surface};
 use glium::backend::glutin_backend::GlutinFacade;
-use nalgebra::{Norm, Vector3};
+use nalgebra::{Eye, Norm, Matrix4, Isometry3, Translation};
+use ncollide::shape::{Ball, ShapeHandle};
+use ncollide::world::{CollisionWorld3, CollisionGroups, GeometricQueryType, CollisionObject3};
 use noise::{self, Seed, Brownian3};
+use num::One;
 use threadpool::ThreadPool;
 
 use errors::{ChainErr, Result};
 use gfx::{Camera, LevelOfDetail};
-use math::{Vec3f, ScalarField};
+use gfx::lod::ChunkId;
+use math::{GpuScalar, Matrix4f, Vec3f, ScalarField};
 use utils::read_utf8_file;
-
 
 #[derive(Clone, Debug)]
 pub struct PlanetSpec {
@@ -83,14 +87,19 @@ impl ScalarField for PlanetField {
 
         let radius = spec.base_radius + spec.landscape_deviation * spec.base_radius * perturbation;
         // distance - radius
+        y
 
-        distance - spec.base_radius
         // y - (x * x + z * z).sqrt().sin()
     }
 }
 
+const COLLIDE_WORLD_GROUP: usize = 0;
+const COLLIDE_PLAYER_GROUP: usize = 1;
+
 pub struct PlanetRenderer<'a, 'b, Field: ScalarField> {
     lod: LevelOfDetail<'a, Field>,
+    collision_world: CollisionWorld3<GpuScalar, ()>,
+    collision_set: HashSet<usize>,
     draw_parameters: DrawParameters<'b>,
     program: Program,
     scalar_field: Arc<Field>,
@@ -111,7 +120,7 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
                 .chain_err(|| "Could not compile the shaders."));
 
         let scalar_field = Arc::new(scalar_field);
-        let lod = LevelOfDetail::new(scalar_field.clone(), thread_pool, facade, 16, 16.0, 16.0);
+        let lod = LevelOfDetail::new(scalar_field.clone(), thread_pool, facade, 6, 16.0, 16.0, 10);
 
         let params = glium::DrawParameters {
             depth: glium::Depth {
@@ -123,46 +132,102 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
             ..Default::default()
         };
 
+        let mut collision_world = CollisionWorld3::new(0.01, false);
+        let ball = ShapeHandle::new(Ball::new(4.0f32));
+        let mut camera_group = CollisionGroups::new();
+        camera_group.set_membership(&[COLLIDE_PLAYER_GROUP]);
+        collision_world.deferred_add(0,
+                                     Isometry3::one(),
+                                     ball,
+                                     camera_group,
+                                     GeometricQueryType::Contacts(0.0),
+                                     ());
+        collision_world.update();
+
         Ok(PlanetRenderer {
             lod: lod,
+            collision_world: collision_world,
+            collision_set: HashSet::new(),
             draw_parameters: params,
             program: program,
             scalar_field: scalar_field,
         })
     }
 
-    pub fn render(&mut self, frame: &mut Frame, camera: &Camera) -> Result<()> {
+    pub fn render(&mut self, frame: &mut Frame, camera: &mut Camera) -> Result<()> {
+        let PlanetRenderer { ref program,
+                             ref draw_parameters,
+                             ref mut lod,
+                             ref mut collision_world,
+                             ref mut collision_set,
+                             .. } = *self;
+
+        collision_world.deferred_set_position(0, camera.position());
+
         let view = camera.view_matrix();
-
-        let light = [-40.0f32, 0.0, -60.0];
-
+        let light = Vec3f::new(-40.0f32, 0.0, -60.0);
         let uniforms = uniform! {
             perspective: PlanetRenderer::<Field>::perspective_matrix(frame),
             model: PlanetRenderer::<Field>::model_matrix(),
             view: view,
-            u_light: light,
+            u_light: &light,
         };
 
-        let program = &self.program;
-        let draw_parameters = &self.draw_parameters;
-        try!(self.lod.update(camera, |vertex_buffer, index_buffer| {
-            frame.draw(vertex_buffer,
-                      index_buffer,
-                      &program,
+        let screen_chunks = try!(lod.update(camera));
+        let contacts_query = GeometricQueryType::Contacts(0.0);
+        let mut world_group = CollisionGroups::new();
+        world_group.set_membership(&[COLLIDE_WORLD_GROUP]);
+        world_group.set_whitelist(&[COLLIDE_PLAYER_GROUP]);
+
+        let mut remove_set = collision_set.clone();
+        for chunk in screen_chunks.into_iter() {
+            try!(frame.draw(&chunk.vertex_buffer,
+                      &chunk.index_buffer,
+                      program,
                       &uniforms,
-                      &draw_parameters)
-                .chain_err(|| "Could not render frame.")
-        }));
+                      draw_parameters)
+                .chain_err(|| "Could not render frame."));
+
+            if !collision_set.contains(&chunk.uid) {
+                info!("adding collision chunk {}", chunk.uid);
+                collision_world.deferred_add(chunk.uid,
+                                             Isometry3::one(),
+                                             chunk.tri_mesh.clone(),
+                                             world_group,
+                                             contacts_query,
+                                             ());
+                collision_set.insert(chunk.uid);
+                remove_set.remove(&chunk.uid);
+            }
+        }
+        // info!("collision_set {:?}", collision_set);
+        // info!("remove_set {:?}", remove_set);
+
+        // for uid in remove_set.into_iter() {
+        //     info!("removing collision chunk {}", uid);
+        //     collision_world.deferred_remove(uid);
+        //     collision_set.remove(&uid);
+        // }
+
+        collision_world.update();
+        for (p1, p2, c) in collision_world.contacts() {
+            if p1.uid == 0 {
+                camera.observer_mut().append_translation_mut(&(c.normal * c.depth));
+            } else if p2.uid == 0 {
+                camera.observer_mut().append_translation_mut(&(c.normal * c.depth));
+            }
+
+            // info!("p1.uid: {:?} | p2.uid: {:?}", p1.uid, p2.uid);
+            // info!("c: {:?}", c);
+        }
+
+        info!("Camera: {:?}", camera.position().translation());
 
         Ok(())
     }
 
-    #[cfg_attr(rustfmt, rustfmt_skip)]
-    fn model_matrix() -> [[f32; 4]; 4] {
-        [[1.0, 0.0, 0.0, 0.0],
-         [0.0, 1.0, 0.0, 0.0],
-         [0.0, 0.0, 1.0, 0.0],
-         [0.0, 0.0, 0.0, 1.0f32]]
+    fn model_matrix() -> Matrix4f {
+        Matrix4f::from(Matrix4::new_identity(4))
     }
 
     fn perspective_matrix(frame: &Frame) -> [[f32; 4]; 4] {

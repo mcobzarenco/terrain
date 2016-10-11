@@ -49,7 +49,7 @@ impl App {
             let mut target = self.facade.draw();
             target.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
 
-            try!(planet.render(&mut target, &self.camera));
+            try!(planet.render(&mut target, &mut self.camera));
             try!(target.finish()
                 .chain_err(|| "Could not render frame."));
 
