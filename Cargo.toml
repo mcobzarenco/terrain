@@ -23,3 +23,7 @@ rand = "0.3.14"
 rayon = "0.4.2"
 threadpool = "1.3.2"
 wavefront_obj = "4.0.2"
+
+[dependencies.nphysics3d]
+path = "/home/marius/w/nphysics/build/nphysics3d"
+# version= "0.5.0"

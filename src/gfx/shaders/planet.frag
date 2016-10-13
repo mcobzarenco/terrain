@@ -233,9 +233,9 @@ float edgeFactor(){
 }
 
 void main() {
-  // float brightness = max(0.2, dot(normalize(v_normal),
-  //                                 normalize(v_pos - u_light)));
-  color.rgb = mix(vec3(0.01), vec3(0.5), edgeFactor());
+  float brightness = max(0.2, dot(normalize(v_normal),
+                                  normalize(v_pos - u_light))) * edgeFactor();
+  color.rgb = mix(vec3(0.01), vec3(0.5), brightness);
 }
 
 void main2() {
@@ -253,7 +253,7 @@ void main2() {
   // float x = pow((sqrt(dot(v_pos, v_pos)) / 28.0), 4);
   // float x = 0.5;
   vec3 regular_color = vec3(x * z, y, x + y + z);
-  vec3 dark_color = regular_color * 0.3;
+  vec3 dark_color = regular_color * 0.1;
   // vec3 regular_color = vec3(0.9, 0.9, 0.9);
   // vec3 dark_color = regular_color * 0.01;
 

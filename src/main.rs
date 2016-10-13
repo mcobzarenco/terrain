@@ -21,6 +21,7 @@ extern crate ncollide;
 #[macro_use]
 extern crate newtype_derive;
 extern crate noise;
+extern crate nphysics3d;
 extern crate num;
 extern crate rand;
 extern crate rayon;
