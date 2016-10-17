@@ -9,7 +9,20 @@ use wavefront_obj::obj as wavefront_obj;
 
 use errors::*;
 use utils::read_utf8_file;
-use math::{Vec2f, Vec3f};
+use math::{GpuScalar, Vec2f, Vec3f};
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct PlainVertex {
+    position: Vec3f,
+}
+
+impl<'a> From<&'a [GpuScalar; 3]> for PlainVertex {
+    fn from(array: &'a [GpuScalar; 3]) -> PlainVertex {
+        PlainVertex { position: Vec3f::new(array[0], array[1], array[2]) }
+    }
+}
+
+implement_vertex!(PlainVertex, position);
 
 pub trait NormalVertex {
     fn position(&self) -> &Vec3f;

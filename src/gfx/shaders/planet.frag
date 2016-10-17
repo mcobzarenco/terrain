@@ -233,9 +233,9 @@ float edgeFactor(){
 }
 
 void main() {
-  float brightness = max(0.2, dot(normalize(v_normal),
-                                  normalize(v_pos - u_light))) * edgeFactor();
-  color.rgb = mix(vec3(0.01), vec3(0.5), brightness);
+  // float brightness = max(0.2, dot(normalize(v_normal),
+  //                                 normalize(v_pos - u_light))) * edgeFactor();
+  color.rgb = mix(vec3(0.01), vec3(0.5), edgeFactor());
 }
 
 void main2() {

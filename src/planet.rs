@@ -2,8 +2,7 @@ use std::collections::{HashSet, HashMap};
 use std::sync::Arc;
 
 use glium::{self, Frame, DrawParameters, Program, Surface};
-use glium::backend::glutin_backend::GlutinFacade;
-use glium::glutin::{Window, Event, ElementState, VirtualKeyCode};
+use glium::glutin::{Event, ElementState, VirtualKeyCode};
 use nalgebra::{Eye, Norm, Matrix4, Isometry3, Translation, Point3, Rotation, Vector3, Inverse,
                ToHomogeneous};
 use ncollide::shape::{Ball, ShapeHandle};
@@ -16,7 +15,7 @@ use num::One;
 use threadpool::ThreadPool;
 
 use errors::{ChainErr, Result};
-use gfx::{Camera, LevelOfDetail};
+use gfx::{Camera, LevelOfDetail, Window};
 use gfx::lod::ChunkId;
 use math::{GpuScalar, Matrix4f, Vec3f, ScalarField};
 use utils::read_utf8_file;
@@ -34,11 +33,11 @@ pub struct PlanetSpec {
 impl Default for PlanetSpec {
     fn default() -> Self {
         PlanetSpec {
-            base_radius: 64.0,
-            landscape_deviation: 0.4,
+            base_radius: 0.5e4,
+            landscape_deviation: 0.15,
             num_octaves: 5,
             persistence: 0.8,
-            wavelength: 7.0,
+            wavelength: 1.7,
             lacunarity: 1.91,
         }
     }
@@ -66,6 +65,7 @@ impl ScalarField for PlanetField {
         let mut position = Vec3f::new(x, y, z);
         let distance = position.norm();
         position.normalize_mut();
+        // info!("pos: {:?}", position);
 
         let mountains = Brownian3::new(noise::open_simplex3, spec.num_octaves)
             .persistence(spec.persistence)
@@ -73,21 +73,20 @@ impl ScalarField for PlanetField {
             .lacunarity(spec.lacunarity);
         let plains = Brownian3::new(noise::open_simplex3, 3)
             .persistence(0.9)
-            .wavelength(3.0)
+            .wavelength(1.9)
             .lacunarity(1.8);
         let mix = Brownian3::new(noise::open_simplex3, 2).wavelength(2.0);
 
         let mut perturbation = 0.0;
         let mut alpha = (1.0 + mix.apply(&self.seed, (position * 3.0 + 10.0).as_ref())) / 2.0;
-        let u = spec.landscape_deviation * spec.base_radius * 0.01;
         if alpha > 0.45 && alpha < 0.55 {
             alpha = (alpha - 0.45) * 10.0;
-            perturbation = alpha * (mountains.apply(&self.seed, (position * 4.0).as_ref()) + u) +
-                           (1.0 - alpha) * plains.apply(&self.seed, position.as_ref());
+            perturbation = alpha * mountains.apply(&self.seed, (position * 4.0).as_ref()) +
+                           (1.0 - alpha) * plains.apply(&self.seed, (position * 2.0).as_ref());
         } else if alpha < 0.45 {
-            perturbation = plains.apply(&self.seed, position.as_ref());
+            perturbation = plains.apply(&self.seed, (position * 2.0).as_ref());
         } else {
-            perturbation = mountains.apply(&self.seed, (position * 4.0).as_ref()) + u;
+            perturbation = mountains.apply(&self.seed, (position * 4.0).as_ref());
         }
 
         let radius = spec.base_radius + spec.landscape_deviation * spec.base_radius * perturbation;
@@ -118,7 +117,7 @@ impl Player {
         let observer = Isometry3::new_observer_frame(position, &target, &up);
         Player {
             player: player,
-            keyboard_speed: 32.0,
+            keyboard_speed: 1000.0,
             mouse_speed: 0.04,
             observer: observer,
         }
@@ -128,8 +127,11 @@ impl Player {
         Matrix4f::from(self.observer.inverse().unwrap().to_homogeneous())
     }
 
-    pub fn update_position(&mut self) {
-        self.observer.set_translation(self.player.borrow().position().translation());
+    pub fn update_position(&mut self) -> Isometry3<GpuScalar> {
+        let player = self.player.borrow();
+        let position = player.position();
+        self.observer.set_translation(position.translation());
+        self.observer
     }
 
     pub fn update(&mut self, delta_time: f32, window: &Window, event: Event) -> () {
@@ -197,13 +199,17 @@ impl Player {
 
             // Handle mouse
             Event::MouseMoved(x, y) => {
-                let (width, height) = window.get_inner_size_pixels().unwrap();
-                window.set_cursor_position((width as i32) / 2, (height as i32) / 2).unwrap();
+                let size = window.size();
+                window.facade()
+                    .get_window()
+                    .unwrap()
+                    .set_cursor_position((size.width as i32) / 2, (size.height as i32) / 2)
+                    .unwrap();
 
                 let horizontal_angle = self.mouse_speed * delta_time *
-                                       ((width as f32) / 2.0 - x as f32);
+                                       ((size.width as f32) / 2.0 - x as f32);
                 let vertical_angle = self.mouse_speed * delta_time *
-                                     ((height as f32) / 2.0 - y as f32);
+                                     ((size.height as f32) / 2.0 - y as f32);
 
                 let rotation = self.observer.rotation;
 
@@ -238,23 +244,25 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
     where Field: 'static + ScalarField + Send + Sync
 {
     pub fn new(scalar_field: Field,
-               facade: &'a GlutinFacade,
+               window: &'a Window,
                thread_pool: &'a ThreadPool)
                -> Result<Self> {
 
         let vertex_shader = try!(read_utf8_file(VERTEX_SHADER));
         let fragment_shader = try!(read_utf8_file(FRAGMENT_SHADER));
-        let program =
-            try!(glium::Program::from_source(facade, &vertex_shader, &fragment_shader, None)
-                .chain_err(|| "Could not compile the shaders."));
+        let program = try!(glium::Program::from_source(window.facade(),
+                                                       &vertex_shader,
+                                                       &fragment_shader,
+                                                       None)
+            .chain_err(|| "Could not compile the shaders."));
 
         let scalar_field = Arc::new(scalar_field);
         let lod = LevelOfDetail::new(scalar_field.clone(),
                                      thread_pool,
-                                     facade,
+                                     window,
                                      10,
                                      16.0,
-                                     32.0,
+                                     32768.0,
                                      10);
 
         let params = glium::DrawParameters {
@@ -268,12 +276,12 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
         };
 
         let mut physics_world = World::new();
-        let ball = ShapeHandle::new(Ball::new(0.01f32));
+        let ball = ShapeHandle::new(Ball::new(3.0f32));
         let ball_mass = 80.0;
         let props = Some((ball_mass, ball.center_of_mass(), ball.angular_inertia(ball_mass)));
-        let player_handle = physics_world.add_rigid_body(RigidBody::new(ball, props, 0.4, 1.0));
+        let player_handle = physics_world.add_rigid_body(RigidBody::new(ball, props, 0.1, 2.0));
         let player = Player::new(player_handle,
-                                 &(Point3::new(1.0, 1.0, 1.0) * 40.0),
+                                 &(Point3::new(1.0, 1.0, 1.0) * 0.5e4),
                                  &Point3::new(0.0, 0.0, 0.0),
                                  &Vector3::y());
 
@@ -297,9 +305,9 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
                              ref mut player,
                              .. } = *self;
 
-        physics_world.set_gravity(player.observer.translation().normalize() * -2.60);
-        let new_camera = camera.position().translation() + player.position().translation() / 2.0;
-        camera.observer_mut().set_translation(new_camera);
+        physics_world.set_gravity(player.observer.translation().normalize() * -9.60);
+        // let new_camera = camera.position().translation() + player.position().translation() / 2.0;
+        // camera.observer_mut().set_translation(new_camera);
 
         // let speed = player.player.borrow().lin_vel();
         // if speed.norm() > 6.0 {
@@ -311,7 +319,7 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
         player.update_position();
 
         let view = player.view_matrix();
-        let light = Vec3f::new(-40.0f32, 0.0, -60.0);
+        let light = Vec3f::new(-40.0f32, 0.0, -1.1e4);
         let uniforms = uniform! {
             perspective: PlanetRenderer::<Field>::perspective_matrix(frame),
             model: PlanetRenderer::<Field>::model_matrix(),
@@ -354,18 +362,6 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
             physics_chunks.remove(&uid);
         }
 
-        // camera.observer_mut().set_rotation(player.borrow().position().rotation());
-        // for (p1, p2, c) in physics_world.contacts() {
-        //     if p1.uid == 0 {
-        //         camera.observer_mut().append_translation_mut(&(c.normal * c.depth));
-        //     } else if p2.uid == 0 {
-        //         camera.observer_mut().append_translation_mut(&(c.normal * c.depth));
-        //     }
-
-        //     // info!("p1.uid: {:?} | p2.uid: {:?}", p1.uid, p2.uid);
-        //     // info!("c: {:?}", c);
-        // }
-
         // info!("Camera: {:?}", camera.position().translation());
 
         Ok(())
@@ -384,8 +380,8 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
         let aspect_ratio = height as f32 / width as f32;
 
         let fov: f32 = 3.141592 / 3.0;
-        let zfar = 512.0;
-        let znear = 1e-5;
+        let zfar = 1e4;
+        let znear = 0.1;
 
         let f = 1.0 / (fov / 2.0).tan();
 

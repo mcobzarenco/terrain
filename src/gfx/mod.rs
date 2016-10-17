@@ -1,16 +1,18 @@
 pub mod app;
 pub mod camera;
-pub mod cubemap;
+pub mod skybox;
 pub mod lod;
 pub mod marching_cubes;
 pub mod mesh;
+pub mod window;
 
 pub use self::app::App;
 pub use self::camera::Camera;
-pub use self::cubemap::CubemapRenderer;
+pub use self::skybox::SkyboxRenderer;
 pub use self::lod::LevelOfDetail;
 pub use self::marching_cubes::marching_cubes;
 pub use self::mesh::{BarycentricVertex, Vertex, Mesh};
+pub use self::window::Window;
 
 use glium::texture::{ClientFormat, PixelValue};
 use glium::uniforms::{AsUniformValue, UniformValue};

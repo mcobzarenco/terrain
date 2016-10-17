@@ -4,7 +4,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chan::{self, Receiver, Sender};
-use glium::backend::glutin_backend::GlutinFacade;
 use glium::index::PrimitiveType;
 use glium::{IndexBuffer, VertexBuffer};
 use lru_time_cache::LruCache;
@@ -14,7 +13,7 @@ use num::Zero;
 use threadpool::ThreadPool;
 
 use errors::{ChainErr, Result};
-use gfx::{marching_cubes, BarycentricVertex, Camera, Mesh};
+use gfx::{marching_cubes, BarycentricVertex, Camera, Mesh, Window};
 use math::{GpuScalar, Vec3f, ScalarField};
 
 pub struct LevelOfDetail<'a, Field>
@@ -24,13 +23,12 @@ pub struct LevelOfDetail<'a, Field>
     octree: Octree,
     max_level: u8,
     step: f32,
-    size: f32,
 }
 
 impl<'a, Field: 'static + ScalarField + Send + Sync> LevelOfDetail<'a, Field> {
     pub fn new(scalar_field: Arc<Field>,
                thread_pool: &'a ThreadPool,
-               facade: &'a GlutinFacade,
+               window: &'a Window,
                max_level: u8,
                step: f32,
                size: f32,
@@ -39,12 +37,11 @@ impl<'a, Field: 'static + ScalarField + Send + Sync> LevelOfDetail<'a, Field> {
         LevelOfDetail {
             chunk_renderer: ChunkRenderer::new(scalar_field.clone(),
                                                thread_pool,
-                                               facade,
+                                               window,
                                                uid_start),
-            octree: Octree::new(Vec3f::zero() - 64.0, 128.0),
+            octree: Octree::new(Vec3f::zero() - size / 2.0, size),
             max_level: max_level,
             step: step,
-            size: size,
         }
     }
 
@@ -66,14 +63,14 @@ pub struct Chunk {
 
 impl Chunk {
     fn new(uid: usize,
-           facade: &GlutinFacade,
+           window: &Window,
            mesh: Mesh<BarycentricVertex>,
            tri_mesh: TriMeshHandle)
            -> Result<Self> {
-        let vertex_buffer = try!(VertexBuffer::new(facade, &mesh.vertices)
+        let vertex_buffer = try!(VertexBuffer::new(window.facade(), &mesh.vertices)
             .chain_err(|| "Cannot create vertex buffer."));
         let index_buffer =
-            try!(IndexBuffer::new(facade, PrimitiveType::TrianglesList, &mesh.indices)
+            try!(IndexBuffer::new(window.facade(), PrimitiveType::TrianglesList, &mesh.indices)
                 .chain_err(|| "Cannot create index buffer."));
 
         Ok(Chunk {
@@ -115,7 +112,7 @@ struct Octree {
 
 impl Octree {
     pub fn new(position: Vec3f, size: f32) -> Self {
-        let mut octree = Octree {
+        let octree = Octree {
             nodes: vec![],
             node_stack: VecDeque::with_capacity(64),
             root: OctreeNode::new(position, size, 0, true),
@@ -170,9 +167,10 @@ impl Octree {
                 if !is_available {
                     nodes[current_index].draw = false;
                 }
-                // info!("Skipping chunk {:?} with state {:?}",
+                // info!("Skipping chunk {:?} with state {:?} (distance={:?})",
                 //       chunk_id,
-                //       chunk_cache.get_chunk_state(&chunk_id));
+                //       chunk_cache.get_chunk_state(&chunk_id),
+                //       distance_to_cube(&position, size, &focus));
             } else {
                 let first_child_index = nodes.len();
                 nodes[current_index].children =
@@ -287,7 +285,7 @@ impl ChunkId {
     }
 }
 
-const OCTREE_VOXEL_DENSITY: f32 = 65536.0;
+const OCTREE_VOXEL_DENSITY: f32 = 8.0;
 const OCTREE_OFFSETS: [(f32, f32, f32); 8] = [(0.0, 0.0, 0.0),
                                               (0.0, 0.0, 1.0),
                                               (0.0, 1.0, 0.0),
@@ -311,7 +309,7 @@ type ChunkRendererWork = (ChunkId, Mesh<BarycentricVertex>, TriMeshHandle);
 struct ChunkRenderer<'a, Field: ScalarField> {
     scalar_field: Arc<Field>,
     thread_pool: &'a ThreadPool,
-    facade: &'a GlutinFacade,
+    window: &'a Window,
     chunk_send: Sender<ChunkRendererWork>,
     chunk_recv: Receiver<ChunkRendererWork>,
     loaded_chunks: LruCache<ChunkId, Chunk>,
@@ -325,14 +323,14 @@ impl<'a, Field> ChunkRenderer<'a, Field>
 {
     fn new(scalar_field: Arc<Field>,
            thread_pool: &'a ThreadPool,
-           facade: &'a GlutinFacade,
+           window: &'a Window,
            uid_start: usize)
            -> Self {
         let (send, recv) = chan::sync(128);
         ChunkRenderer {
             scalar_field: scalar_field,
             thread_pool: thread_pool,
-            facade: facade,
+            window: window,
             chunk_send: send,
             chunk_recv: recv,
             loaded_chunks: LruCache::with_capacity(2048),
@@ -379,7 +377,7 @@ impl<'a, Field> ChunkRenderer<'a, Field>
             pending_chunks.remove(&chunk_id);
             if mesh.vertices.len() > 0 {
                 loaded_chunks.insert(chunk_id,
-                                     try!(Chunk::new(self.empty_uid, self.facade, mesh, tri_mesh)));
+                                     try!(Chunk::new(self.empty_uid, self.window, mesh, tri_mesh)));
                 self.empty_uid += 1;
             } else {
                 empty_chunks.insert(chunk_id, ());

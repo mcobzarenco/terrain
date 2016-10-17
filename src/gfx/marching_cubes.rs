@@ -1,6 +1,6 @@
 use num::{Float, Zero, FromPrimitive};
 
-use nalgebra::{Cross, Norm, Vector3};
+use nalgebra::{Norm, Vector3};
 use math::{ScalarField, Vec3f};
 use super::mesh::{Mesh, Vertex, triangle_normal};
 
