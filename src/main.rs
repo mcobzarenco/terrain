@@ -29,6 +29,7 @@ extern crate threadpool;
 extern crate wavefront_obj;
 
 mod errors;
+mod game;
 mod gfx;
 mod math;
 mod utils;

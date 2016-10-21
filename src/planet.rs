@@ -2,21 +2,17 @@ use std::collections::{HashSet, HashMap};
 use std::sync::Arc;
 
 use glium::{self, Frame, DrawParameters, Program, Surface};
-use glium::glutin::{Event, ElementState, VirtualKeyCode};
-use nalgebra::{Eye, Norm, Matrix4, Isometry3, Translation, Point3, Rotation, Vector3, Inverse,
-               ToHomogeneous};
+use nalgebra::{Eye, Norm, Matrix4, Isometry3, Translation, Point3, Rotation, Vector3};
 use ncollide::shape::{Ball, ShapeHandle};
-use ncollide::world::{CollisionWorld3, CollisionGroups, GeometricQueryType, CollisionObject3};
 use nphysics3d::object::{RigidBody, RigidBodyHandle};
 use nphysics3d::volumetric::Volumetric;
 use nphysics3d::world::World;
 use noise::{self, Seed, Brownian3};
-use num::One;
 use threadpool::ThreadPool;
 
 use errors::{ChainErr, Result};
+use game::Player;
 use gfx::{Camera, LevelOfDetail, Window};
-use gfx::lod::ChunkId;
 use math::{GpuScalar, Matrix4f, Vec3f, ScalarField};
 use utils::read_utf8_file;
 
@@ -97,139 +93,6 @@ impl ScalarField for PlanetField {
     }
 }
 
-pub struct Player {
-    player: RigidBodyHandle<GpuScalar>,
-    keyboard_speed: GpuScalar,
-    mouse_speed: GpuScalar,
-    observer: Isometry3<GpuScalar>,
-}
-
-impl Player {
-    fn new(mut player: RigidBodyHandle<GpuScalar>,
-           position: &Point3<GpuScalar>,
-           target: &Point3<GpuScalar>,
-           up: &Vector3<GpuScalar>)
-           -> Self {
-        player.borrow_mut().set_translation(position.to_vector());
-        player.borrow_mut().set_deactivation_threshold(None);
-
-        player.borrow_mut().set_margin(0.01);
-        let observer = Isometry3::new_observer_frame(position, &target, &up);
-        Player {
-            player: player,
-            keyboard_speed: 1000.0,
-            mouse_speed: 0.04,
-            observer: observer,
-        }
-    }
-
-    pub fn view_matrix(&self) -> Matrix4f {
-        Matrix4f::from(self.observer.inverse().unwrap().to_homogeneous())
-    }
-
-    pub fn update_position(&mut self) -> Isometry3<GpuScalar> {
-        let player = self.player.borrow();
-        let position = player.position();
-        self.observer.set_translation(position.translation());
-        self.observer
-    }
-
-    pub fn update(&mut self, delta_time: f32, window: &Window, event: Event) -> () {
-        self.update_position();
-        let mut player = self.player.borrow_mut();
-        info!("Player's (active={} | {:?}) lin velocity {:?}",
-              player.is_active(),
-              player.deactivation_threshold(),
-              player.lin_vel());
-
-        match event {
-            // Handle keyboard
-            Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Key1)) => {
-                self.keyboard_speed /= 0.5;
-                info!("New keyboard speed: {:?}", self.keyboard_speed);
-            }
-            Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Key2)) => {
-                self.keyboard_speed *= 0.5;
-                info!("New keyboard speed: {:?}", self.keyboard_speed);
-            }
-            Event::KeyboardInput(ElementState::Released, _, Some(VirtualKeyCode::W)) |
-            Event::KeyboardInput(ElementState::Released, _, Some(VirtualKeyCode::S)) |
-            Event::KeyboardInput(ElementState::Released, _, Some(VirtualKeyCode::A)) |
-            Event::KeyboardInput(ElementState::Released, _, Some(VirtualKeyCode::D)) => {
-                player.clear_forces();
-            }
-            Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::W)) => {
-                let movement = self.observer.rotation * Vector3::z() * self.keyboard_speed;
-                info!("m: {:?}", movement);
-                player.append_lin_force(movement);
-            }
-            Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::S)) => {
-                let movement = self.observer.rotation * Vector3::z() * self.keyboard_speed * -1.0;
-                player.append_lin_force(movement);
-            }
-            Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::A)) => {
-                let movement = self.observer.rotation * Vector3::x() * self.keyboard_speed * -1.0;
-                player.append_lin_force(movement);
-            }
-
-            Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::D)) => {
-                let movement = self.observer.rotation * Vector3::x() * self.keyboard_speed;
-                player.append_lin_force(movement);
-            }
-            Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Space)) => {
-                let movement = self.observer.rotation * Vector3::y() * self.keyboard_speed;
-                info!("m: {:?}", movement);
-                // player.append_lin_force(movement);
-                player.apply_central_impulse(movement);
-                // player.set_lin_vel(movement);
-            }
-
-            Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Q)) => {
-                let angle = self.observer.rotation * Vector3::z() * delta_time;
-                self.observer
-                    .rotation
-                    .append_rotation_mut(&angle);
-            }
-            Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::E)) => {
-                let angle = self.observer.rotation * Vector3::z() * delta_time * -1.0;
-                self.observer
-                    .rotation
-                    .append_rotation_mut(&angle);
-            }
-
-            // Handle mouse
-            Event::MouseMoved(x, y) => {
-                let size = window.size();
-                window.facade()
-                    .get_window()
-                    .unwrap()
-                    .set_cursor_position((size.width as i32) / 2, (size.height as i32) / 2)
-                    .unwrap();
-
-                let horizontal_angle = self.mouse_speed * delta_time *
-                                       ((size.width as f32) / 2.0 - x as f32);
-                let vertical_angle = self.mouse_speed * delta_time *
-                                     ((size.height as f32) / 2.0 - y as f32);
-
-                let rotation = self.observer.rotation;
-
-                self.observer
-                    .rotation
-                    .append_rotation_mut(&(rotation * (Vector3::x() * -1.0) * vertical_angle));
-                self.observer
-                    .rotation
-                    .append_rotation_mut(&(rotation * (Vector3::y() * -1.0) * horizontal_angle));
-
-            }
-            _ => (),
-        }
-    }
-
-    pub fn position(&self) -> Isometry3<GpuScalar> {
-        self.observer
-    }
-}
-
 pub struct PlanetRenderer<'a, 'b, Field: ScalarField> {
     lod: LevelOfDetail<'a, Field>,
     physics_world: World<GpuScalar>,
@@ -243,10 +106,7 @@ pub struct PlanetRenderer<'a, 'b, Field: ScalarField> {
 impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
     where Field: 'static + ScalarField + Send + Sync
 {
-    pub fn new(scalar_field: Field,
-               window: &'a Window,
-               thread_pool: &'a ThreadPool)
-               -> Result<Self> {
+    pub fn new(scalar_field: Field, window: &Window, thread_pool: &'a ThreadPool) -> Result<Self> {
 
         let vertex_shader = try!(read_utf8_file(VERTEX_SHADER));
         let fragment_shader = try!(read_utf8_file(FRAGMENT_SHADER));
@@ -257,13 +117,7 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
             .chain_err(|| "Could not compile the shaders."));
 
         let scalar_field = Arc::new(scalar_field);
-        let lod = LevelOfDetail::new(scalar_field.clone(),
-                                     thread_pool,
-                                     window,
-                                     10,
-                                     16.0,
-                                     32768.0,
-                                     10);
+        let lod = LevelOfDetail::new(scalar_field.clone(), thread_pool, 10, 16.0, 32768.0, 10);
 
         let params = glium::DrawParameters {
             depth: glium::Depth {
@@ -279,7 +133,7 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
         let ball = ShapeHandle::new(Ball::new(3.0f32));
         let ball_mass = 80.0;
         let props = Some((ball_mass, ball.center_of_mass(), ball.angular_inertia(ball_mass)));
-        let player_handle = physics_world.add_rigid_body(RigidBody::new(ball, props, 0.1, 2.0));
+        let player_handle = physics_world.add_rigid_body(RigidBody::new(ball, props, 0.01, 2.0));
         let player = Player::new(player_handle,
                                  &(Point3::new(1.0, 1.0, 1.0) * 0.5e4),
                                  &Point3::new(0.0, 0.0, 0.0),
@@ -296,7 +150,11 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
         })
     }
 
-    pub fn render(&mut self, frame: &mut Frame, camera: &mut Camera) -> Result<()> {
+    pub fn render(&mut self,
+                  window: &Window,
+                  frame: &mut Frame,
+                  camera: &mut Camera)
+                  -> Result<()> {
         let PlanetRenderer { ref program,
                              ref draw_parameters,
                              ref mut lod,
@@ -327,7 +185,7 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
             u_light: &light,
         };
 
-        let screen_chunks = try!(lod.update(camera));
+        let screen_chunks = try!(lod.update(window, camera));
 
         let mut remove_set: HashSet<usize> = physics_chunks.keys().map(|x| *x).collect();
 
@@ -351,7 +209,7 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
                 let handle = physics_world.add_rigid_body(RigidBody::new(
                     chunk.tri_mesh.clone(),
                     None,
-                    0.5,
+                    0.1,
                     1.0));
                 physics_chunks.insert(chunk.uid, handle);
             }

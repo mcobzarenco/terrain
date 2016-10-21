@@ -1,17 +1,19 @@
 pub mod app;
 pub mod camera;
-pub mod skybox;
+pub mod input;
 pub mod lod;
 pub mod marching_cubes;
 pub mod mesh;
+pub mod skybox;
 pub mod window;
 
 pub use self::app::App;
 pub use self::camera::Camera;
-pub use self::skybox::SkyboxRenderer;
+pub use self::input::{Input, Gesture, Analog2d, KeyCode, MouseButton};
 pub use self::lod::LevelOfDetail;
 pub use self::marching_cubes::marching_cubes;
 pub use self::mesh::{BarycentricVertex, Vertex, Mesh};
+pub use self::skybox::SkyboxRenderer;
 pub use self::window::Window;
 
 use glium::texture::{ClientFormat, PixelValue};

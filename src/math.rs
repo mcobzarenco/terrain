@@ -2,6 +2,7 @@ use num::Zero;
 use nalgebra::{Matrix4, Point2, Point3, Point4, Vector2, Vector3, Vector4};
 
 pub type GpuScalar = f32;
+pub type CpuScalar = f32;
 
 const EPS: f32 = 1e-4;
 

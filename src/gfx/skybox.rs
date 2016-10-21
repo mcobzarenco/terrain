@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::Instant;
 use std::fmt::Debug;
 use glium::{BlitTarget, DrawParameters, Frame, Program, Rect, Surface, IndexBuffer, VertexBuffer};
 use glium::draw_parameters::BackfaceCullingMode;
@@ -10,22 +11,21 @@ use image;
 use nalgebra::{PerspectiveMatrix3, Translation};
 
 use errors::{ChainErr, Result};
-use gfx::{Camera, Mesh, Window};
+use gfx::{Camera, Window};
 use gfx::mesh::PlainVertex;
-use math::{GpuScalar, Matrix4f, Vec3f};
+use math::{GpuScalar, Vec3f};
 
-pub struct SkyboxRenderer<'a, 'b> {
-    window: &'a Window,
+pub struct SkyboxRenderer<'a> {
     cubemap: Cubemap,
-    draw_parameters: DrawParameters<'b>,
+    draw_parameters: DrawParameters<'a>,
     program: Program,
     vertex_buffer: VertexBuffer<PlainVertex>,
     index_buffer: IndexBuffer<u32>,
     perspective: PerspectiveMatrix3<GpuScalar>,
 }
 
-impl<'a, 'b> SkyboxRenderer<'a, 'b> {
-    pub fn new(window: &'a Window) -> Result<Self> {
+impl<'a> SkyboxRenderer<'a> {
+    pub fn new(window: &Window) -> Result<Self> {
         let program = try!(window.program(&VERTEX_SHADER, &FRAGMENT_SHADER));
         let params = DrawParameters {
             backface_culling: BackfaceCullingMode::CullingDisabled,
@@ -44,7 +44,6 @@ impl<'a, 'b> SkyboxRenderer<'a, 'b> {
 
         let perspective = perspective_matrix(window.aspect());
         Ok(SkyboxRenderer {
-            window: window,
             cubemap: try!(Cubemap::empty(window.facade(), 1024)
                 .chain_err(|| "Could not create cubemap texture.")),
             draw_parameters: params,
@@ -55,14 +54,15 @@ impl<'a, 'b> SkyboxRenderer<'a, 'b> {
         })
     }
 
-    pub fn load<P: ?Sized>(&mut self, path: &P) -> Result<()>
+    pub fn load<P: ?Sized>(&mut self, window: &Window, path: &P) -> Result<()>
         where P: AsRef<Path> + Debug
     {
-        let SkyboxRenderer { ref window, .. } = *self;
-
+        let instant = Instant::now();
         let image = try!(image::open(path)
                 .chain_err(|| format!("Could not load image at {:?}", path)))
-            .to_rgba();
+            .to_rgb();
+        info!("to_rgba - elapsed {:?}", instant.elapsed());
+
         let (width, height) = image.dimensions();
         info!("Loaded Skybox asset with width={:?} height={:?} path={:?}",
               width,
@@ -72,9 +72,13 @@ impl<'a, 'b> SkyboxRenderer<'a, 'b> {
         let step = (height / 3) as u32;
         info!("step: {}", step);
 
-        let image = RawImage2d::from_raw_rgba(image.into_raw(), (width, height));
+        let image = RawImage2d::from_raw_rgb(image.into_raw(), (width, height));
+        info!("RawImage2d::from_raw_rgba - elapsed {:?}",
+              instant.elapsed());
         let source_tex = try!(Texture2d::new(window.facade(), image)
             .chain_err(|| format!("Could not create texture from {:?}", path)));
+        info!("Texture2d::new() - elapsed {:?}", instant.elapsed());
+
 
         let target_rect = BlitTarget {
             left: 0,
@@ -89,7 +93,7 @@ impl<'a, 'b> SkyboxRenderer<'a, 'b> {
             width: step,
             height: step,
         };
-        let cube_face = try!(self.surface_for_face(CubeLayer::PositiveY));
+        let cube_face = try!(self.surface_for_face(window, CubeLayer::PositiveY));
         source_tex.as_surface().blit_color(&source_rect,
                                            &cube_face,
                                            &target_rect,
@@ -100,7 +104,7 @@ impl<'a, 'b> SkyboxRenderer<'a, 'b> {
             width: step,
             height: step,
         };
-        let cube_face = try!(self.surface_for_face(CubeLayer::PositiveZ));
+        let cube_face = try!(self.surface_for_face(window, CubeLayer::PositiveZ));
         source_tex.as_surface().blit_color(&source_rect,
                                            &cube_face,
                                            &target_rect,
@@ -111,7 +115,7 @@ impl<'a, 'b> SkyboxRenderer<'a, 'b> {
             width: step,
             height: step,
         };
-        let cube_face = try!(self.surface_for_face(CubeLayer::NegativeY));
+        let cube_face = try!(self.surface_for_face(window, CubeLayer::NegativeY));
         source_tex.as_surface().blit_color(&source_rect,
                                            &cube_face,
                                            &target_rect,
@@ -122,7 +126,7 @@ impl<'a, 'b> SkyboxRenderer<'a, 'b> {
             width: step,
             height: step,
         };
-        let cube_face = try!(self.surface_for_face(CubeLayer::PositiveX));
+        let cube_face = try!(self.surface_for_face(window, CubeLayer::PositiveX));
         source_tex.as_surface().blit_color(&source_rect,
                                            &cube_face,
                                            &target_rect,
@@ -134,7 +138,7 @@ impl<'a, 'b> SkyboxRenderer<'a, 'b> {
             width: step,
             height: step,
         };
-        let cube_face = try!(self.surface_for_face(CubeLayer::NegativeZ));
+        let cube_face = try!(self.surface_for_face(window, CubeLayer::NegativeZ));
         source_tex.as_surface().blit_color(&source_rect,
                                            &cube_face,
                                            &target_rect,
@@ -146,11 +150,12 @@ impl<'a, 'b> SkyboxRenderer<'a, 'b> {
             width: step,
             height: step,
         };
-        let cube_face = try!(self.surface_for_face(CubeLayer::NegativeX));
+        let cube_face = try!(self.surface_for_face(window, CubeLayer::NegativeX));
         source_tex.as_surface().blit_color(&source_rect,
                                            &cube_face,
                                            &target_rect,
                                            MagnifySamplerFilter::Linear);
+        info!("Blit - elapsed {:?}", instant.elapsed());
 
         Ok(())
     }
@@ -197,8 +202,8 @@ impl<'a, 'b> SkyboxRenderer<'a, 'b> {
     }
 
     #[inline]
-    fn surface_for_face(&self, face: CubeLayer) -> Result<SimpleFrameBuffer> {
-        SimpleFrameBuffer::new(self.window.facade(), self.cubemap.main_level().image(face))
+    fn surface_for_face(&self, window: &Window, face: CubeLayer) -> Result<SimpleFrameBuffer> {
+        SimpleFrameBuffer::new(window.facade(), self.cubemap.main_level().image(face))
             .chain_err(|| format!("Could not create a framebuffer for {:?}", face))
     }
 }

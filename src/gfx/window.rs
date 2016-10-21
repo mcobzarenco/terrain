@@ -1,8 +1,8 @@
 use glium::{DisplayBuild, Frame, Program, Surface};
 use glium::glutin::{CursorState, WindowBuilder};
-use glium::backend::glutin_backend::GlutinFacade;
+use glium::backend::glutin_backend::{GlutinFacade, WinRef as GlutinWindow};
 
-use errors::{Result, ChainErr};
+use errors::{Result, ChainErr, ErrorKind};
 use math::GpuScalar;
 use utils::read_utf8_file;
 
@@ -10,8 +10,6 @@ pub const GLSL_VERSION_STRING: &'static str = "330 core";
 
 pub struct Window {
     facade: GlutinFacade,
-    width: u32,
-    height: u32,
 }
 
 impl Window {
@@ -23,15 +21,7 @@ impl Window {
             .build_glium()
             .chain_err(|| "Could not create a Glutin window."));
 
-        if let Some(win) = facade.get_window() {
-            try!(win.set_cursor_state(CursorState::Hide));
-        }
-
-        Ok(Window {
-            facade: facade,
-            width: width,
-            height: height,
-        })
+        Ok(Window { facade: facade })
     }
 
     pub fn size(&self) -> WindowInnerSize {
@@ -59,6 +49,29 @@ impl Window {
 
     pub fn facade(&self) -> &GlutinFacade {
         &self.facade
+    }
+
+    pub fn set_cursor_state(&mut self, cursor_state: CursorState) -> Result<()> {
+        let glutin_window = try!(self.glutin_window());
+        try!(glutin_window.set_cursor_state(cursor_state));
+        Ok(())
+    }
+
+    pub fn set_cursor_position(&mut self, x: i32, y: i32) -> Result<()> {
+        let glutin_window = try!(self.glutin_window());
+        if let Err(_) = glutin_window.set_cursor_position(x, y) {
+            Err(ErrorKind::SetCursorPositionError(x, y).into())
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn glutin_window(&self) -> Result<GlutinWindow> {
+        if let Some(window) = self.facade.get_window() {
+            Ok(window)
+        } else {
+            Err(ErrorKind::MissingGlutinWindow.into())
+        }
     }
 
     pub fn program(&self, vertex_src: &str, fragment_src: &str) -> Result<Program> {

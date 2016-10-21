@@ -28,29 +28,25 @@ pub struct LevelOfDetail<'a, Field>
 impl<'a, Field: 'static + ScalarField + Send + Sync> LevelOfDetail<'a, Field> {
     pub fn new(scalar_field: Arc<Field>,
                thread_pool: &'a ThreadPool,
-               window: &'a Window,
                max_level: u8,
                step: f32,
                size: f32,
                uid_start: usize)
                -> Self {
         LevelOfDetail {
-            chunk_renderer: ChunkRenderer::new(scalar_field.clone(),
-                                               thread_pool,
-                                               window,
-                                               uid_start),
+            chunk_renderer: ChunkRenderer::new(scalar_field.clone(), thread_pool, uid_start),
             octree: Octree::new(Vec3f::zero() - size / 2.0, size),
             max_level: max_level,
             step: step,
         }
     }
 
-    pub fn update(&mut self, camera: &Camera) -> Result<Vec<&Chunk>> {
+    pub fn update(&mut self, window: &Window, camera: &Camera) -> Result<Vec<&Chunk>> {
         let (draw_chunk_ids, fetch_chunk_ids) = self.octree
             .rebuild(self.max_level,
                      Vec3f::from(camera.position().translation()),
                      &mut self.chunk_renderer);
-        self.chunk_renderer.render(&draw_chunk_ids, fetch_chunk_ids)
+        self.chunk_renderer.render(window, &draw_chunk_ids, fetch_chunk_ids)
     }
 }
 
@@ -309,7 +305,6 @@ type ChunkRendererWork = (ChunkId, Mesh<BarycentricVertex>, TriMeshHandle);
 struct ChunkRenderer<'a, Field: ScalarField> {
     scalar_field: Arc<Field>,
     thread_pool: &'a ThreadPool,
-    window: &'a Window,
     chunk_send: Sender<ChunkRendererWork>,
     chunk_recv: Receiver<ChunkRendererWork>,
     loaded_chunks: LruCache<ChunkId, Chunk>,
@@ -321,16 +316,11 @@ struct ChunkRenderer<'a, Field: ScalarField> {
 impl<'a, Field> ChunkRenderer<'a, Field>
     where Field: 'static + ScalarField + Send + Sync
 {
-    fn new(scalar_field: Arc<Field>,
-           thread_pool: &'a ThreadPool,
-           window: &'a Window,
-           uid_start: usize)
-           -> Self {
+    fn new(scalar_field: Arc<Field>, thread_pool: &'a ThreadPool, uid_start: usize) -> Self {
         let (send, recv) = chan::sync(128);
         ChunkRenderer {
             scalar_field: scalar_field,
             thread_pool: thread_pool,
-            window: window,
             chunk_send: send,
             chunk_recv: recv,
             loaded_chunks: LruCache::with_capacity(2048),
@@ -341,6 +331,7 @@ impl<'a, Field> ChunkRenderer<'a, Field>
     }
 
     fn render(&mut self,
+              window: &Window,
               draw_chunk_ids: &Vec<ChunkId>,
               fetch_chunk_ids: Vec<ChunkId>)
               -> Result<Vec<&Chunk>> {
@@ -377,7 +368,7 @@ impl<'a, Field> ChunkRenderer<'a, Field>
             pending_chunks.remove(&chunk_id);
             if mesh.vertices.len() > 0 {
                 loaded_chunks.insert(chunk_id,
-                                     try!(Chunk::new(self.empty_uid, self.window, mesh, tri_mesh)));
+                                     try!(Chunk::new(self.empty_uid, window, mesh, tri_mesh)));
                 self.empty_uid += 1;
             } else {
                 empty_chunks.insert(chunk_id, ());
