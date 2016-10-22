@@ -22,6 +22,10 @@ error_chain! {
         SetCursorPositionError(x: i32, y: i32) {
             description("Could not set cursor position.")
             display("Could not set cursor position to ({}, {})", x, y)
+        } 
+        UnexhaustedHeightmapFile { 
+            description("More data than expected in heightmap file.")
+            display("More data than expected in heightmap file.")
         }
     }
 }

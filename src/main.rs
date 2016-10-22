@@ -1,5 +1,6 @@
 #![recursion_limit = "1024"]
 
+extern crate byteorder;
 #[macro_use]
 extern crate chan;
 #[macro_use]
@@ -34,6 +35,7 @@ mod gfx;
 mod math;
 mod utils;
 mod planet;
+mod heightmap;
 
 use std::error::Error;
 use clap::Arg;

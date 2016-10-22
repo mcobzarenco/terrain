@@ -2,6 +2,7 @@
 name = "terrain"
 version = "0.1.0"
 dependencies = [
+ "byteorder 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "chan 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "custom_derive 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",

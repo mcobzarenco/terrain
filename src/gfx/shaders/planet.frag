@@ -232,32 +232,32 @@ float edgeFactor(){
   return min(min(a3.x, a3.y), a3.z);
 }
 
-void main() {
+void main2() {
   // float brightness = max(0.2, dot(normalize(v_normal),
   //                                 normalize(v_pos - u_light))) * edgeFactor();
   color.rgb = mix(vec3(0.01), vec3(0.5), edgeFactor());
 }
 
-void main2() {
+void main() {
   float brightness = max(0.02, dot(normalize(v_normal),
                                    normalize(v_pos - u_light)));
-  float s = (1.3 + sqrt(dot(v_pos, v_pos))) / 2.3;
+  // float s = (1.3 + sqrt(dot(v_pos, v_pos))) / 2.3;
 
   // float x = max((sqrt(dot(v_pos, v_pos)) - 32.0) / 10.0, 1.0);
   // vec3 regular_color = vec3(x * z, y, sqrt(x * y));
   // vec3 dark_color = regular_color * 0.3;
 
-  float x = (Cellular2D(vec2(2 * v_pos.x, 12 * v_pos.y)) + .3) / 1.3;
-  float y = (Cellular2D(vec2(3 * v_pos.z, 8 * v_pos.y)) + .8) / 1.8;
-  float z = (Cellular2D(vec2(10 * s, 10 * v_pos.y * v_pos.x)) + .3) / 1.3;
+  // float x = (Cellular2D(vec2(2 * v_pos.x, 12 * v_pos.y)) + .3) / 1.3;
+  // float y = (Cellular2D(vec2(3 * v_pos.z, 8 * v_pos.y)) + .8) / 1.8;
+  // float z = (Cellular2D(vec2(10, 10 * v_pos.y * v_pos.x)) + .3) / 1.3;
   // float x = pow((sqrt(dot(v_pos, v_pos)) / 28.0), 4);
   // float x = 0.5;
-  vec3 regular_color = vec3(x * z, y, x + y + z);
-  vec3 dark_color = regular_color * 0.1;
-  // vec3 regular_color = vec3(0.9, 0.9, 0.9);
-  // vec3 dark_color = regular_color * 0.01;
+  // vec3 regular_color = vec3(x * z, y, x + y + z);
+  // vec3 dark_color = regular_color * 0.1;
+  vec3 regular_color = vec3(0.83, 0.25, 0.07);
+  vec3 dark_color = regular_color * 0.2;
 
   // vec3 dark_color = vec3(0.5, 0.5, 0.5);
   // vec3 regular_color = vec3(0.8, 0.8, 0.8);
-  color = vec4(mix(dark_color, regular_color, x), 1.0);
+  color = vec4(mix(dark_color, regular_color, brightness), 1.0);
 }

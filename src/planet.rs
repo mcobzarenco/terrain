@@ -119,7 +119,7 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
             .chain_err(|| "Could not compile the shaders."));
 
         let scalar_field = Arc::new(scalar_field);
-        let lod = LevelOfDetail::new(scalar_field.clone(), thread_pool, 10, 16.0, 32768.0, 10);
+        let lod = LevelOfDetail::new(scalar_field.clone(), thread_pool, 12, 16.0, 32768.0, 10);
 
         let params = glium::DrawParameters {
             depth: glium::Depth {
@@ -132,8 +132,8 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
         };
 
         let mut physics_world = World::new();
-        let ball = ShapeHandle::new(Ball::new(3.0f32));
-        let ball_mass = 80.0;
+        let ball = ShapeHandle::new(Ball::new(3.0 as CpuScalar));
+        let ball_mass = 100.0;
         let props = Some((ball_mass, ball.center_of_mass(), ball.angular_inertia(ball_mass)));
         let player_handle = physics_world.add_rigid_body(RigidBody::new(ball, props, 0.01, 2.0));
         let player = Player::new(player_handle,
@@ -179,7 +179,7 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
         player.update_position();
 
         let view = player.view_matrix();
-        let light = Vec3f::new(-40.0f32, 0.0, -1.1e4);
+        let light = Vec3f::new(-40.0f32, 0.0, -4000.0);
         let uniforms = uniform! {
             perspective: PlanetRenderer::<Field>::perspective_matrix(frame),
             model: PlanetRenderer::<Field>::model_matrix(),

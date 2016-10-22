@@ -60,7 +60,7 @@ impl Player {
         let observer = Isometry3::new_observer_frame(position, &target, &up);
         Player {
             player: player,
-            keyboard_speed: 1000.0,
+            keyboard_speed: 500.0,
             mouse_speed: 0.04,
             observer: observer,
         }
@@ -80,11 +80,6 @@ impl Player {
     pub fn update(&mut self, delta_time: f32, input: &Input) -> () {
         self.update_position();
         let mut player = self.player.borrow_mut();
-        info!("Player's (active={} | {:?}) lin velocity {:?}",
-              player.is_active(),
-              player.deactivation_threshold(),
-              player.lin_vel());
-
         if input.poll_gesture(&Gesture::AnyOf(vec![Gesture::KeyUpTrigger(KeyCode::W),
                                                    Gesture::KeyUpTrigger(KeyCode::A),
                                                    Gesture::KeyUpTrigger(KeyCode::S),
@@ -94,7 +89,6 @@ impl Player {
 
         if input.poll_gesture(&Gesture::KeyHold(KeyCode::W)) {
             let movement = self.observer.rotation * Vector3::z() * self.keyboard_speed;
-            info!("m: {:?}", movement);
             player.append_lin_force(movement);
         }
         if input.poll_gesture(&Gesture::KeyHold(KeyCode::S)) {
@@ -111,11 +105,8 @@ impl Player {
             player.append_lin_force(movement);
         }
         if input.poll_gesture(&Gesture::KeyHold(KeyCode::Space)) {
-            let movement = self.observer.rotation * Vector3::y() * self.keyboard_speed;
-            info!("m: {:?}", movement);
-            // player.append_lin_force(movement);
+            let movement = self.observer.rotation * Vector3::y() * self.keyboard_speed * 0.1;
             player.apply_central_impulse(movement);
-            // player.set_lin_vel(movement);
         }
         if input.poll_gesture(&Gesture::KeyHold(KeyCode::Q)) {
             let angle = self.observer.rotation * Vector3::z() * delta_time;
@@ -146,9 +137,7 @@ impl Player {
         });
 
         if mouse_rel != Vector2::zero() {
-            info!("mouse_rel: {:?}", mouse_rel);
             mouse_rel *= self.mouse_speed * delta_time;
-            info!("mouse_rel adjusted: {:?}", mouse_rel);
             let horizontal_angle = mouse_rel[0];
             let vertical_angle = mouse_rel[1];
 

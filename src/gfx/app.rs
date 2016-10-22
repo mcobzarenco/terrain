@@ -7,6 +7,7 @@ use errors::{ChainErr, Result};
 use gfx::{Camera, Gesture, Input, KeyCode, SkyboxRenderer, Window};
 use math::{Point3f, Vec3f};
 use planet::{PlanetField, PlanetRenderer};
+use heightmap::Heightmap;
 
 pub struct App {
     window: Window,
@@ -31,9 +32,15 @@ impl App {
 
     pub fn run(&mut self, planet_field: PlanetField) -> Result<()> {
         let App { ref mut input, ref thread_pool, ref mut window, .. } = *self;
-        let mut planet = try!(PlanetRenderer::new(planet_field, window, thread_pool));
+
+        let heightmap = try!(Heightmap::from_pds(3396.0,
+                                                 11520 * 4,
+                                                 5632 * 4,
+                                                 "/home/marius/w/terrain/assets/128/megdr-128-stiched.img"));
+
+        let mut planet = try!(PlanetRenderer::new(heightmap, window, thread_pool));
         let mut skybox = try!(SkyboxRenderer::new(window));
-        try!(skybox.load(window, "/home/marius/w/terrain/assets/skybox-galaxy.jpg"));
+        // try!(skybox.load(window, "/home/marius/w/terrain/assets/skybox-galaxy.jpg"));
         info!("Loaded the skybox.");
 
         let quit_gesture = Gesture::AnyOf(vec![Gesture::QuitTrigger,
@@ -50,7 +57,7 @@ impl App {
             self.camera.observer_mut().set_translation(player_pos.translation());
             self.camera.observer_mut().set_rotation(player_pos.rotation());
 
-            try!(skybox.render(&mut target, &mut self.camera));
+            // try!(skybox.render(&mut target, &mut self.camera));
             try!(planet.render(window, &mut target, &mut self.camera));
             try!(target.finish()
                 .chain_err(|| "Could not render frame."));
