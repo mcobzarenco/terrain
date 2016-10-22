@@ -54,11 +54,11 @@ impl<'a> SkyboxRenderer<'a> {
         })
     }
 
-    pub fn load<P: ?Sized>(&mut self, window: &Window, path: &P) -> Result<()>
+    pub fn load<P>(&mut self, window: &Window, path: P) -> Result<()>
         where P: AsRef<Path> + Debug
     {
         let instant = Instant::now();
-        let image = try!(image::open(path)
+        let image = try!(image::open(path.as_ref())
                 .chain_err(|| format!("Could not load image at {:?}", path)))
             .to_rgb();
         info!("to_rgba - elapsed {:?}", instant.elapsed());

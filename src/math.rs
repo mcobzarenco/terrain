@@ -4,27 +4,35 @@ use nalgebra::{Matrix4, Point2, Point3, Point4, Vector2, Vector3, Vector4};
 pub type GpuScalar = f32;
 pub type CpuScalar = f32;
 
-const EPS: f32 = 1e-4;
+const EPS: CpuScalar = 1.0;
 
 pub trait ScalarField {
     #[inline]
-    fn value_at(&self, x: f32, y: f32, z: f32) -> f32;
+    fn value_at(&self, x: CpuScalar, y: CpuScalar, z: CpuScalar) -> CpuScalar;
 
     #[inline]
-    fn gradient_at(&self, x: f32, y: f32, z: f32) -> [f32; 3] {
-        let dx = self.value_at(x + EPS, y, z) - self.value_at(x - EPS, y, z);
-        let dy = self.value_at(x, y + EPS, z) - self.value_at(x, y - EPS, z);
-        let dz = self.value_at(x, y, z + EPS) - self.value_at(x, y, z - EPS);
+    fn gradient_at(&self, x: CpuScalar, y: CpuScalar, z: CpuScalar) -> [CpuScalar; 3] {
+        let EPS2 = 2.0 * EPS;
+        let dx = (self.value_at(x + EPS, y, z) - self.value_at(x - EPS, y, z));
+        let dy = (self.value_at(x, y + EPS, z) - self.value_at(x, y - EPS, z));
+        let dz = (self.value_at(x, y, z + EPS) - self.value_at(x, y, z - EPS));
         [dx, dy, dz]
     }
 }
 
-pub struct SquareField;
-
-impl ScalarField for SquareField {
+pub trait ScalarField2 {
     #[inline]
-    fn value_at(&self, x: f32, y: f32, z: f32) -> f32 {
-        x * x + y * y + z * z
+    fn value_at(&self, position: &Vector2<CpuScalar>) -> CpuScalar;
+
+    #[inline]
+    fn gradient_at(&self, point: &Vector2<CpuScalar>) -> Vector2<CpuScalar> {
+        let EPS2 = 2.0 * EPS;
+        let point = *point;
+        let x_perturb = Vector2::x() * EPS;
+        let y_perturb = Vector2::y() * EPS;
+        let dx = (self.value_at(&(point + x_perturb)) - self.value_at(&(point - x_perturb))) / EPS2;
+        let dy = (self.value_at(&(point + y_perturb)) - self.value_at(&(point - y_perturb))) / EPS2;
+        Vector2::new(dx, dy)
     }
 }
 
@@ -40,7 +48,7 @@ custom_derive! {
              NewtypeMul(GpuScalar), NewtypeMulAssign(GpuScalar),
              NewtypeDiv, NewtypeDivAssign,
              NewtypeDiv(GpuScalar), NewtypeDivAssign(GpuScalar))]
-    pub struct Vec2f(Vector2<f32>);
+    pub struct Vec2f(Vector2<GpuScalar>);
 }
 
 impl Vec2f {
@@ -71,7 +79,7 @@ custom_derive! {
              NewtypeMul(GpuScalar), NewtypeMulAssign(GpuScalar),
              NewtypeDiv, NewtypeDivAssign,
              NewtypeDiv(GpuScalar), NewtypeDivAssign(GpuScalar))]
-    pub struct Vec3f(Vector3<f32>);
+    pub struct Vec3f(Vector3<GpuScalar>);
 }
 
 impl Vec3f {
@@ -102,7 +110,7 @@ custom_derive! {
              NewtypeMul(GpuScalar), NewtypeMulAssign(GpuScalar),
              NewtypeDiv, NewtypeDivAssign,
              NewtypeDiv(GpuScalar), NewtypeDivAssign(GpuScalar))]
-    pub struct Vec4f(Vector4<f32>);
+    pub struct Vec4f(Vector4<GpuScalar>);
 }
 
 impl Vec4f {
@@ -121,7 +129,7 @@ custom_derive! {
              NewtypeSub(GpuScalar), NewtypeSubAssign(GpuScalar),
              NewtypeMul(GpuScalar), NewtypeMulAssign(GpuScalar),
              NewtypeDiv(GpuScalar), NewtypeDivAssign(GpuScalar))]
-    pub struct Point2f(Point2<f32>);
+    pub struct Point2f(Point2<GpuScalar>);
 }
 
 impl Point2f {
@@ -139,7 +147,7 @@ custom_derive! {
              NewtypeSub(GpuScalar), NewtypeSubAssign(GpuScalar),
              NewtypeMul(GpuScalar), NewtypeMulAssign(GpuScalar),
              NewtypeDiv(GpuScalar), NewtypeDivAssign(GpuScalar))]
-    pub struct Point3f(Point3<f32>);
+    pub struct Point3f(Point3<GpuScalar>);
 }
 
 impl Point3f {
@@ -157,7 +165,7 @@ custom_derive! {
              NewtypeSub(GpuScalar), NewtypeSubAssign(GpuScalar),
              NewtypeMul(GpuScalar), NewtypeMulAssign(GpuScalar),
              NewtypeDiv(GpuScalar), NewtypeDivAssign(GpuScalar))]
-    pub struct Point4f(Point4<f32>);
+    pub struct Point4f(Point4<GpuScalar>);
 }
 
 impl Point4f {
@@ -177,7 +185,7 @@ custom_derive! {
              NewtypeMul, NewtypeMulAssign,
              NewtypeMul(GpuScalar), NewtypeMulAssign(GpuScalar),
              NewtypeDiv(GpuScalar), NewtypeDivAssign(GpuScalar))]
-    pub struct Matrix4f(Matrix4<f32>);
+    pub struct Matrix4f(Matrix4<GpuScalar>);
 }
 
 impl Matrix4f {

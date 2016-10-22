@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+
 use errors::{Result, ChainErr};
 
 pub fn read_utf8_file<P: AsRef<Path>>(path: P) -> Result<String> {

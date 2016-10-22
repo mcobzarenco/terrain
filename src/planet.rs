@@ -13,7 +13,7 @@ use threadpool::ThreadPool;
 use errors::{ChainErr, Result};
 use game::Player;
 use gfx::{Camera, LevelOfDetail, Window};
-use math::{GpuScalar, Matrix4f, Vec3f, ScalarField};
+use math::{CpuScalar, Matrix4f, Vec3f, ScalarField};
 use utils::read_utf8_file;
 
 #[derive(Clone, Debug)]
@@ -55,7 +55,9 @@ impl PlanetField {
 
 impl ScalarField for PlanetField {
     #[inline]
-    fn value_at(&self, x: f32, y: f32, z: f32) -> f32 {
+    fn value_at(&self, x: CpuScalar, y: CpuScalar, z: CpuScalar) -> CpuScalar {
+        assert!(x.is_finite() && y.is_finite() && z.is_finite(),
+                format!("{} {} {}", x, y, z));
         let PlanetField { ref seed, ref spec } = *self;
 
         let mut position = Vec3f::new(x, y, z);
@@ -95,8 +97,8 @@ impl ScalarField for PlanetField {
 
 pub struct PlanetRenderer<'a, 'b, Field: ScalarField> {
     lod: LevelOfDetail<'a, Field>,
-    physics_world: World<GpuScalar>,
-    physics_chunks: HashMap<usize, RigidBodyHandle<GpuScalar>>,
+    physics_world: World<CpuScalar>,
+    physics_chunks: HashMap<usize, RigidBodyHandle<CpuScalar>>,
     draw_parameters: DrawParameters<'b>,
     program: Program,
     scalar_field: Arc<Field>,

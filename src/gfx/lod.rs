@@ -92,11 +92,11 @@ fn field_to_mesh<Field>(scalar_field: &Field,
         .with_barycentric_coordinates();
     let elapsed = time.elapsed();
     let delta = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 * 1e-9;
-    info!("Took {:.2}s to create chunk at {:?} (size {:?}) from field ({:?} vertices)",
-          delta,
-          position,
-          size,
-          mesh.vertices.len());
+    debug!("Took {:.2}s to create chunk at {:?} (size {:?}) from field ({:?} vertices)",
+           delta,
+           position,
+           size,
+           mesh.vertices.len());
     Ok(mesh)
 }
 
@@ -159,14 +159,10 @@ impl Octree {
 
             let is_available = chunk_cache.is_available(&chunk_id);
             if !is_available || level >= max_level ||
-               distance_to_cube(&position, size, &focus) > size {
+               distance_to_cube(&position, size, &focus) > 2.0 * size {
                 if !is_available {
                     nodes[current_index].draw = false;
                 }
-                // info!("Skipping chunk {:?} with state {:?} (distance={:?})",
-                //       chunk_id,
-                //       chunk_cache.get_chunk_state(&chunk_id),
-                //       distance_to_cube(&position, size, &focus));
             } else {
                 let first_child_index = nodes.len();
                 nodes[current_index].children =
@@ -300,7 +296,16 @@ fn distance_to_cube(cube_position: &Vec3f, size: f32, query: &Vec3f) -> f32 {
 }
 
 type TriMeshHandle = ShapeHandle<Point3<GpuScalar>, Isometry3<GpuScalar>>;
-type ChunkRendererWork = (ChunkId, Mesh<BarycentricVertex>, TriMeshHandle);
+
+struct ChunkRendererWork {
+    chunk_id: ChunkId,
+    meshes: ChunkMeshes,
+}
+
+enum ChunkMeshes {
+    Empty,
+    Present(Mesh<BarycentricVertex>, TriMeshHandle),
+}
 
 struct ChunkRenderer<'a, Field: ScalarField> {
     scalar_field: Arc<Field>,
@@ -358,20 +363,24 @@ impl<'a, Field> ChunkRenderer<'a, Field>
                             ref mut empty_chunks,
                             .. } = *self;
 
-        while let Some((chunk_id, mesh, tri_mesh)) = (|| {
+        while let Some(message) = (|| {
             chan_select! {
                 default => { return None; },
-                chunk_recv.recv() -> maybe_chunk => { return maybe_chunk; },
+                chunk_recv.recv() -> message => { return message; },
             }
         })() {
-            info!("Received chunk with {} vertices.", mesh.vertices.len());
+            let ChunkRendererWork { chunk_id, meshes } = message;
+
             pending_chunks.remove(&chunk_id);
-            if mesh.vertices.len() > 0 {
-                loaded_chunks.insert(chunk_id,
-                                     try!(Chunk::new(self.empty_uid, window, mesh, tri_mesh)));
-                self.empty_uid += 1;
-            } else {
-                empty_chunks.insert(chunk_id, ());
+            match meshes {
+                ChunkMeshes::Empty => {
+                    empty_chunks.insert(chunk_id, ());
+                }
+                ChunkMeshes::Present(mesh, tri_mesh) => {
+                    loaded_chunks.insert(chunk_id,
+                                         try!(Chunk::new(self.empty_uid, window, mesh, tri_mesh)));
+                    self.empty_uid += 1;
+                }
             }
         }
 
@@ -380,11 +389,11 @@ impl<'a, Field> ChunkRenderer<'a, Field>
                 break;
             }
 
-            info!("Submitted chunk {:?}.", chunk_id);
+            debug!("Submitted chunk {:?}.", chunk_id);
             let position = chunk_id.position();
             let chunk_size = chunk_id.size();
 
-            let num_steps = 16.0;
+            let num_steps = 32.0;
             let step_size = chunk_size / num_steps;
             let scalar_field = scalar_field.clone();
             let sender = chunk_send.clone();
@@ -395,22 +404,31 @@ impl<'a, Field> ChunkRenderer<'a, Field>
                                          step_size,
                                          0.0)
                     .unwrap();
-                let tri_mesh =
-                    TriMesh::new(Arc::new(mesh.vertices
-                                     .iter()
-                                     .map(|x| x.position.to_point())
-                                     .collect()),
-                                 Arc::new(mesh.indices
-                                     .chunks(3)
-                                     .map(|x| {
-                                         Point3::new(x[0] as usize, x[1] as usize, x[2] as usize)
-                                     })
-                                     .collect()),
-                                 None,
-                                 None);
-
-                // info!("Chunk: {:?}", chunk);
-                sender.send((chunk_id, mesh, ShapeHandle::new(tri_mesh)));
+                if mesh.vertices.len() == 0 {
+                    sender.send(ChunkRendererWork {
+                        chunk_id: chunk_id,
+                        meshes: ChunkMeshes::Empty,
+                    });
+                } else {
+                    let tri_mesh = TriMesh::new(Arc::new(mesh.vertices
+                                                    .iter()
+                                                    .map(|x| x.position.to_point())
+                                                    .collect()),
+                                                Arc::new(mesh.indices
+                                                    .chunks(3)
+                                                    .map(|x| {
+                                                        Point3::new(x[0] as usize,
+                                                                    x[1] as usize,
+                                                                    x[2] as usize)
+                                                    })
+                                                    .collect()),
+                                                None,
+                                                None);
+                    sender.send(ChunkRendererWork {
+                        chunk_id: chunk_id,
+                        meshes: ChunkMeshes::Present(mesh, ShapeHandle::new(tri_mesh)),
+                    });
+                }
             });
             pending_chunks.insert(chunk_id);
         }
