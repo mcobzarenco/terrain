@@ -1,15 +1,15 @@
-use num::{Float, Zero, FromPrimitive};
+use num::{Float, FromPrimitive, Zero};
 
-use nalgebra::{Norm, Vector3};
-use math::{ScalarField, Vec3f};
+use nalgebra::{Norm, Point3, Vector3};
+use math::{ScalarField3, Vec3f};
 use super::mesh::{Mesh, Vertex, triangle_normal};
 
-pub fn marching_cubes<Field: ScalarField>(field: &Field,
-                                          min: &Vec3f,
-                                          max: &Vec3f,
-                                          step: f32,
-                                          iso_value: f32)
-                                          -> Mesh<Vertex> {
+pub fn marching_cubes<Field: ScalarField3>(field: &Field,
+                                           min: &Vec3f,
+                                           max: &Vec3f,
+                                           step: f32,
+                                           iso_value: f32)
+                                           -> Mesh<Vertex> {
     let mut vertices = vec![];
     let mut indices = vec![];
 
@@ -248,22 +248,22 @@ pub fn marching_cubes<Field: ScalarField>(field: &Field,
 }
 
 #[inline]
-fn eval_field_at_corners<Field: ScalarField>(field: &Field,
-                                             x: f32,
-                                             y: f32,
-                                             z: f32,
-                                             x_dx: f32,
-                                             y_dy: f32,
-                                             z_dz: f32)
-                                             -> [f32; 8] {
-    [field.value_at(x, y, z),
-     field.value_at(x_dx, y, z),
-     field.value_at(x_dx, y_dy, z),
-     field.value_at(x, y_dy, z),
-     field.value_at(x, y, z_dz),
-     field.value_at(x_dx, y, z_dz),
-     field.value_at(x_dx, y_dy, z_dz),
-     field.value_at(x, y_dy, z_dz)]
+fn eval_field_at_corners<Field: ScalarField3>(field: &Field,
+                                              x: f32,
+                                              y: f32,
+                                              z: f32,
+                                              x_dx: f32,
+                                              y_dy: f32,
+                                              z_dz: f32)
+                                              -> [f32; 8] {
+    [field.value_at(&Point3::new(x, y, z)),
+     field.value_at(&Point3::new(x_dx, y, z)),
+     field.value_at(&Point3::new(x_dx, y_dy, z)),
+     field.value_at(&Point3::new(x, y_dy, z)),
+     field.value_at(&Point3::new(x, y, z_dz)),
+     field.value_at(&Point3::new(x_dx, y, z_dz)),
+     field.value_at(&Point3::new(x_dx, y_dy, z_dz)),
+     field.value_at(&Point3::new(x, y_dy, z_dz))]
 }
 
 #[inline]
@@ -319,10 +319,10 @@ fn intersection_vertex(mut x: f32,
 }
 
 #[inline]
-fn normalized_field_gradient_at_vertex<Field: ScalarField>(field: &ScalarField,
-                                                           vertex: &Vec3f)
-                                                           -> Vec3f {
-    Vec3f::from(Vector3::from(&field.gradient_at(vertex[0], vertex[1], vertex[2])).normalize())
+fn normalized_field_gradient_at_vertex<Field: ScalarField3>(field: &ScalarField3,
+                                                            vertex: &Vec3f)
+                                                            -> Vec3f {
+    Vec3f::from(Vector3::from(field.gradient_at(vertex.as_point()).normalize()))
 }
 
 
@@ -372,7 +372,7 @@ impl<Scalar: Float + FromPrimitive> Iterator for Linspace<Scalar> {
 mod tests {
     use super::*;
     use super::Linspace;
-    use math::{ScalarField, SquareField, Vec3f};
+    use math::{ScalarField3, Vec3f};
 
     #[test]
     fn test_linspace() {
@@ -390,18 +390,6 @@ mod tests {
         // let mut l1 = Linspace::new(-10.0f32, 10.0, 5);
         // let l1_elems: Vec<f32> = l1.collect();
         // assert_eq!(vec![10.0, -5.0, 0.0, 5.0, 10.0], l1_elems);
-    }
-
-    #[test]
-    fn test() {
-        let field = SquareField;
-        let mesh = marching_cubes(&field,
-                                  &Vec3f::new(-5., -1., 0.0),
-                                  &Vec3f::new(5., 1., 1.),
-                                  1.0,
-                                  1.0);
-        // println!("VERTICES = {:?}", mesh.vertices);
-        // println!("INDICES = {:?}", mesh.indices);
     }
 }
 

@@ -13,7 +13,7 @@ use threadpool::ThreadPool;
 use errors::{ChainErr, Result};
 use game::Player;
 use gfx::{Camera, LevelOfDetail, Window};
-use math::{CpuScalar, Matrix4f, Vec3f, ScalarField};
+use math::{CpuScalar, Matrix4f, Vec3f, ScalarField3};
 use utils::read_utf8_file;
 
 #[derive(Clone, Debug)]
@@ -53,9 +53,10 @@ impl PlanetField {
     }
 }
 
-impl ScalarField for PlanetField {
+impl ScalarField3 for PlanetField {
     #[inline]
-    fn value_at(&self, x: CpuScalar, y: CpuScalar, z: CpuScalar) -> CpuScalar {
+    fn value_at(&self, position: &Point3<CpuScalar>) -> CpuScalar {
+        let (x, y, z) = (position[0], position[1], position[2]);
         assert!(x.is_finite() && y.is_finite() && z.is_finite(),
                 format!("{} {} {}", x, y, z));
         let PlanetField { ref seed, ref spec } = *self;
@@ -95,7 +96,7 @@ impl ScalarField for PlanetField {
     }
 }
 
-pub struct PlanetRenderer<'a, 'b, Field: ScalarField> {
+pub struct PlanetRenderer<'a, 'b, Field: ScalarField3> {
     lod: LevelOfDetail<'a, Field>,
     physics_world: World<CpuScalar>,
     physics_chunks: HashMap<usize, RigidBodyHandle<CpuScalar>>,
@@ -106,7 +107,7 @@ pub struct PlanetRenderer<'a, 'b, Field: ScalarField> {
 }
 
 impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
-    where Field: 'static + ScalarField + Send + Sync
+    where Field: 'static + ScalarField3 + Send + Sync
 {
     pub fn new(scalar_field: Field, window: &Window, thread_pool: &'a ThreadPool) -> Result<Self> {
 

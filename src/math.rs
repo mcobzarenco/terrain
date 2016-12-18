@@ -6,33 +6,42 @@ pub type CpuScalar = f32;
 
 const EPS: CpuScalar = 1.0;
 
-pub trait ScalarField {
+pub trait ScalarField2 {
     #[inline]
-    fn value_at(&self, x: CpuScalar, y: CpuScalar, z: CpuScalar) -> CpuScalar;
+    fn value_at(&self, position: &Point2<CpuScalar>) -> CpuScalar;
 
     #[inline]
-    fn gradient_at(&self, x: CpuScalar, y: CpuScalar, z: CpuScalar) -> [CpuScalar; 3] {
+    fn gradient_at(&self, position: &Point2<CpuScalar>) -> Vector2<CpuScalar> {
         let EPS2 = 2.0 * EPS;
-        let dx = (self.value_at(x + EPS, y, z) - self.value_at(x - EPS, y, z));
-        let dy = (self.value_at(x, y + EPS, z) - self.value_at(x, y - EPS, z));
-        let dz = (self.value_at(x, y, z + EPS) - self.value_at(x, y, z - EPS));
-        [dx, dy, dz]
+        let position = *position;
+        let x_perturb = Vector2::x() * EPS;
+        let y_perturb = Vector2::y() * EPS;
+        let dx = (self.value_at(&(position + x_perturb)) -
+                  self.value_at(&(position - x_perturb))) / EPS2;
+        let dy = (self.value_at(&(position + y_perturb)) -
+                  self.value_at(&(position - y_perturb))) / EPS2;
+        Vector2::new(dx, dy)
     }
 }
 
-pub trait ScalarField2 {
+pub trait ScalarField3 {
     #[inline]
-    fn value_at(&self, position: &Vector2<CpuScalar>) -> CpuScalar;
+    fn value_at(&self, position: &Point3<CpuScalar>) -> CpuScalar;
 
     #[inline]
-    fn gradient_at(&self, point: &Vector2<CpuScalar>) -> Vector2<CpuScalar> {
+    fn gradient_at(&self, position: &Point3<CpuScalar>) -> Vector3<CpuScalar> {
         let EPS2 = 2.0 * EPS;
-        let point = *point;
-        let x_perturb = Vector2::x() * EPS;
-        let y_perturb = Vector2::y() * EPS;
-        let dx = (self.value_at(&(point + x_perturb)) - self.value_at(&(point - x_perturb))) / EPS2;
-        let dy = (self.value_at(&(point + y_perturb)) - self.value_at(&(point - y_perturb))) / EPS2;
-        Vector2::new(dx, dy)
+        let position = *position;
+        let x_perturb = Vector3::x() * EPS;
+        let y_perturb = Vector3::y() * EPS;
+        let z_perturb = Vector3::z() * EPS;
+        let dx = (self.value_at(&(position + x_perturb)) -
+                  self.value_at(&(position - x_perturb))) / EPS2;
+        let dy = (self.value_at(&(position + y_perturb)) -
+                  self.value_at(&(position - y_perturb))) / EPS2;
+        let dz = (self.value_at(&(position + z_perturb)) -
+                  self.value_at(&(position - z_perturb))) / EPS2;
+        Vector3::new(dx, dy, dz)
     }
 }
 

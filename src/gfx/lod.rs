@@ -14,10 +14,10 @@ use threadpool::ThreadPool;
 
 use errors::{ChainErr, Result};
 use gfx::{marching_cubes, BarycentricVertex, Camera, Mesh, Window};
-use math::{GpuScalar, Vec3f, ScalarField};
+use math::{GpuScalar, Vec3f, ScalarField3};
 
 pub struct LevelOfDetail<'a, Field>
-    where Field: ScalarField
+    where Field: ScalarField3
 {
     chunk_renderer: ChunkRenderer<'a, Field>,
     octree: Octree,
@@ -25,7 +25,7 @@ pub struct LevelOfDetail<'a, Field>
     step: f32,
 }
 
-impl<'a, Field: 'static + ScalarField + Send + Sync> LevelOfDetail<'a, Field> {
+impl<'a, Field: 'static + ScalarField3 + Send + Sync> LevelOfDetail<'a, Field> {
     pub fn new(scalar_field: Arc<Field>,
                thread_pool: &'a ThreadPool,
                max_level: u8,
@@ -84,7 +84,7 @@ fn field_to_mesh<Field>(scalar_field: &Field,
                         step: f32,
                         iso_value: f32)
                         -> Result<Mesh<BarycentricVertex>>
-    where Field: ScalarField
+    where Field: ScalarField3
 {
     let time = Instant::now();
     let p = position + size;
@@ -159,7 +159,7 @@ impl Octree {
 
             let is_available = chunk_cache.is_available(&chunk_id);
             if !is_available || level >= max_level ||
-               distance_to_cube(&position, size, &focus) > 2.0 * size {
+               distance_to_cube(&position, size, &focus) > 2.5 * size {
                 if !is_available {
                     nodes[current_index].draw = false;
                 }
@@ -307,7 +307,7 @@ enum ChunkMeshes {
     Present(Mesh<BarycentricVertex>, TriMeshHandle),
 }
 
-struct ChunkRenderer<'a, Field: ScalarField> {
+struct ChunkRenderer<'a, Field: ScalarField3> {
     scalar_field: Arc<Field>,
     thread_pool: &'a ThreadPool,
     chunk_send: Sender<ChunkRendererWork>,
@@ -319,7 +319,7 @@ struct ChunkRenderer<'a, Field: ScalarField> {
 }
 
 impl<'a, Field> ChunkRenderer<'a, Field>
-    where Field: 'static + ScalarField + Send + Sync
+    where Field: 'static + ScalarField3 + Send + Sync
 {
     fn new(scalar_field: Arc<Field>, thread_pool: &'a ThreadPool, uid_start: usize) -> Self {
         let (send, recv) = chan::sync(128);
@@ -476,7 +476,7 @@ trait ChunkCache {
 }
 
 impl<'a, Field> ChunkCache for ChunkRenderer<'a, Field>
-    where Field: 'static + ScalarField + Send + Sync
+    where Field: 'static + ScalarField3 + Send + Sync
 {
     #[inline]
     fn get_chunk_state(&mut self, chunk_id: &ChunkId) -> ChunkState {

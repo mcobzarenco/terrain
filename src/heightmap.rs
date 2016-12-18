@@ -1,14 +1,14 @@
-use std::cmp::min;
-use std::f32::consts::{FRAC_1_PI, FRAC_2_PI, PI};
+use std::f32::consts::{FRAC_1_PI, PI};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
-use nalgebra::Vector2;
+use image;
+use nalgebra::{FloatPoint, Origin, Point2, Point3, Vector2};
 
 use errors::{ChainErr, ErrorKind, Result};
-use math::{CpuScalar, ScalarField, ScalarField2};
+use math::{CpuScalar, ScalarField3, ScalarField2};
 
 pub struct Heightmap {
     radius: CpuScalar,
@@ -65,8 +65,52 @@ impl Heightmap {
         }
     }
 
+    pub fn from_image<P>(radius: CpuScalar, path: P) -> Result<Self>
+        where P: AsRef<Path> + Debug
+    {
+        let image = try!(image::open(path.as_ref())
+                .chain_err(|| format!("Could not open heightmap image at {:?}", path)))
+            .to_luma();
+
+        let (x_samples, y_samples) = image.dimensions();
+        let num_samples = (x_samples * y_samples) as usize;
+        let mut height = vec![0.0; num_samples];
+        let mut min_height: CpuScalar = 0.0;
+        let mut max_height: CpuScalar = 0.0;
+
+        let num_written = image.enumerate_pixels()
+            .map(|(x, y, pixel)| {
+                let value = pixel.data[0] as CpuScalar;
+                min_height = min_height.min(value);
+                max_height = max_height.max(value);
+                height[(y * x_samples + x) as usize] = value;
+            })
+            .count();
+
+        assert!(num_samples == num_written && num_samples == height.len());
+        info!("Heightmap len: {} [{}, {}]",
+              height.len(),
+              min_height,
+              max_height);
+
+        Ok(Heightmap {
+            height: height,
+            radius: radius,
+            x_max: (x_samples - 1) as usize,
+            y_max: (y_samples - 1) as usize,
+        })
+    }
+
     #[inline]
-    pub fn height_at(&self, long: CpuScalar, lat: CpuScalar) -> CpuScalar {
+    fn discrete_height_at(&self, x: usize, y: usize) -> CpuScalar {
+        self.height[y * (self.x_max + 1) + x]
+    }
+}
+
+impl ScalarField2 for Heightmap {
+    #[inline]
+    fn value_at(&self, position: &Point2<CpuScalar>) -> CpuScalar {
+        let (long, lat) = (position[0], position[1]);
         assert!(0.0 <= long && long <= 1.0 && 0.0 <= lat && lat <= 1.0,
                 format!("{} {}", long, lat));
         let x = self.x_max as CpuScalar * long.min(0.999).max(0.001);
@@ -105,45 +149,70 @@ impl Heightmap {
         //              hxy);
         // }
 
-        // assert!(hxy.is_finite(),
-        //         format!("long: {} lat: {} -> xy: {} {} {} {} | h: {} {} {} {} | \
-        //                  hxy: {} {} {}",
-        //                 long,
-        //                 lat,
-        //                 x0,
-        //                 x1,
-        //                 y0,
-        //                 y1,
-        //                 h00,
-        //                 h01,
-        //                 h10,
-        //                 h11,
-        //                 hx0,
-        //                 hx1,
-        //                 hxy));
+        assert!(hxy.is_finite(),
+                format!("long: {} lat: {} -> xy: {} {} {} {} | h: {} {} {} {} | \
+                         hxy: {} {} {}",
+                        long,
+                        lat,
+                        x0,
+                        x1,
+                        y0,
+                        y1,
+                        h00,
+                        h01,
+                        h10,
+                        h11,
+                        hx0,
+                        hx1,
+                        hxy));
         hxy
     }
+}
 
+impl ScalarField3 for Heightmap {
     #[inline]
-    fn discrete_height_at(&self, x: usize, y: usize) -> CpuScalar {
-        self.height[y * self.x_max + x]
+    fn value_at(&self, position: &Point3<CpuScalar>) -> CpuScalar {
+        let r = position.distance(&Point3::origin()) + 1e-4;
+        let long = (position[2].atan2(position[0]) + PI) * FRAC_1_PI * 0.5;
+        let lat = (position[1] / r).acos() * FRAC_1_PI;
+
+        let field_radius = self.radius +
+                           <Self as ScalarField2>::value_at(self, &(Point2::new(long, lat))) /
+                           1000.0;
+
+        r - field_radius
     }
 }
 
-impl ScalarField2 for Heightmap {
-    #[inline]
-    fn value_at(&self, position: &Vector2<CpuScalar>) -> CpuScalar {
-        0.0
-    }
-}
+// pub trait MapProjection {
+//     fn project(&self, position: &Point3<CpuScalar>) -> Point2<CpuScalar>;
+// }
 
-impl ScalarField for Heightmap {
-    #[inline]
-    fn value_at(&self, x: CpuScalar, y: CpuScalar, z: CpuScalar) -> CpuScalar {
-        let r = (x * x + y * y + z * z + 1e-4).sqrt();
-        let long = (z.atan2(x) + PI) * FRAC_1_PI * 0.5;
-        let lat = (y / r).acos() * FRAC_1_PI;
+// impl<Proj> ScalarField3 for Proj
+//     where Proj: MapProjection + ScalarField2
+// {
+//     #[inline]
+//     fn value_at(&self, position: &Point3<CpuScalar>) -> CpuScalar {
+//         let projection = <Self as MapProjection>::project(self, position);
+//         <Self as ScalarField2>::value_at(self, &projection)
+//     }
+// }
 
-        r - (self.radius + self.height_at(long, lat) / 200.0)
-    }
-}
+// pub struct CylindricalProjection {
+//     radius: CpuScalar,
+// }
+
+// impl CylindricalProjection {
+//     pub fn new(radius: CpuScalar) -> Self {
+//         CylindricalProjection { radius: radius }
+//     }
+// }
+
+// impl MapProjection for CylindricalProjection {
+//     fn project(&self, position: &Point3<CpuScalar>) -> Point2<CpuScalar> {
+//         let r = position.distance(&Point3::origin()) + 1e-4;
+//         let long = (position[2].atan2(position[0]) + PI) * FRAC_1_PI * 0.5;
+//         let lat = (position[1] / r).acos() * FRAC_1_PI;
+//         Point2::new(long, lat)
+//     }
+// }

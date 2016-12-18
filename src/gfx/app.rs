@@ -36,7 +36,9 @@ impl App {
         let heightmap = try!(Heightmap::from_pds(3396.0,
                                                  11520 * 4,
                                                  5632 * 4,
-                                                 "/home/marius/w/terrain/assets/128/megdr-128-stiched.img"));
+                                                 "/home/marius/w/terrain/assets/128/megdr-128-stiched.img")); 
+        // let heightmap = try!(Heightmap::from_image(3396.0,
+        //                                            "/home/marius/w/terrain/assets/earth-21600x10800.jpg"));
 
         let mut planet = try!(PlanetRenderer::new(heightmap, window, thread_pool));
         let mut skybox = try!(SkyboxRenderer::new(window));
