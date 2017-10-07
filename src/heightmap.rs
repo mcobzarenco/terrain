@@ -18,14 +18,18 @@ pub struct Heightmap {
 }
 
 impl Heightmap {
-    pub fn from_pds<P>(radius: CpuScalar,
-                       x_samples: usize,
-                       y_samples: usize,
-                       path: P)
-                       -> Result<Self>
-        where P: AsRef<Path> + Debug
+    pub fn from_pds<P>(
+        radius: CpuScalar,
+        x_samples: usize,
+        y_samples: usize,
+        path: P,
+    ) -> Result<Self>
+    where
+        P: AsRef<Path> + Debug,
     {
-        let file = try!(File::open(path).chain_err(|| "Falied opening heightmap file."));
+        let file = try!(File::open(path).chain_err(
+            || "Falied opening heightmap file.",
+        ));
         let mut reader = BufReader::new(file);
         let num_samples = x_samples * y_samples;
         let mut height = Vec::with_capacity(num_samples);
@@ -34,27 +38,31 @@ impl Heightmap {
         let mut max_height: CpuScalar = 0.0;
 
         while height.len() < num_samples {
-            let value = try!(reader.read_i16::<BigEndian>()
-                .chain_err(|| {
-                    "Heightmap creation failed! Could not read value from file."
-                })) as CpuScalar;
+            let value = try!(reader.read_i16::<BigEndian>().chain_err(
+                || "Heightmap creation failed! Could not read value from file.",
+            )) as CpuScalar;
             min_height = min_height.min(value);
             max_height = max_height.max(value);
             height.push(value);
         }
-        let remaining = try!(reader.read_to_end(&mut Vec::new())
-            .chain_err(|| "Heightmap creation failed! Could not read value from file."));
+        let remaining = try!(reader.read_to_end(&mut Vec::new()).chain_err(
+            || "Heightmap creation failed! Could not read value from file.",
+        ));
         if remaining > 0 {
-            error!("Found unexpected data in heightmap file; expected {} ({} x {}) values)",
-                   num_samples,
-                   x_samples,
-                   y_samples);
+            error!(
+                "Found unexpected data in heightmap file; expected {} ({} x {}) values)",
+                num_samples,
+                x_samples,
+                y_samples
+            );
             Err(ErrorKind::UnexhaustedHeightmapFile.into())
         } else {
-            info!("Heightmap len: {} [{}, {}]",
-                  height.len(),
-                  min_height,
-                  max_height);
+            info!(
+                "Heightmap len: {} [{}, {}]",
+                height.len(),
+                min_height,
+                max_height
+            );
 
             Ok(Heightmap {
                 height: height,
@@ -66,11 +74,12 @@ impl Heightmap {
     }
 
     pub fn from_image<P>(radius: CpuScalar, path: P) -> Result<Self>
-        where P: AsRef<Path> + Debug
+    where
+        P: AsRef<Path> + Debug,
     {
-        let image = try!(image::open(path.as_ref())
-                .chain_err(|| format!("Could not open heightmap image at {:?}", path)))
-            .to_luma();
+        let image = try!(image::open(path.as_ref()).chain_err(|| {
+            format!("Could not open heightmap image at {:?}", path)
+        })).to_luma();
 
         let (x_samples, y_samples) = image.dimensions();
         let num_samples = (x_samples * y_samples) as usize;
@@ -78,7 +87,8 @@ impl Heightmap {
         let mut min_height: CpuScalar = 0.0;
         let mut max_height: CpuScalar = 0.0;
 
-        let num_written = image.enumerate_pixels()
+        let num_written = image
+            .enumerate_pixels()
             .map(|(x, y, pixel)| {
                 let value = pixel.data[0] as CpuScalar;
                 min_height = min_height.min(value);
@@ -88,10 +98,12 @@ impl Heightmap {
             .count();
 
         assert!(num_samples == num_written && num_samples == height.len());
-        info!("Heightmap len: {} [{}, {}]",
-              height.len(),
-              min_height,
-              max_height);
+        info!(
+            "Heightmap len: {} [{}, {}]",
+            height.len(),
+            min_height,
+            max_height
+        );
 
         Ok(Heightmap {
             height: height,
@@ -111,8 +123,10 @@ impl ScalarField2 for Heightmap {
     #[inline]
     fn value_at(&self, position: &Point2<CpuScalar>) -> CpuScalar {
         let (long, lat) = (position[0], position[1]);
-        assert!(0.0 <= long && long <= 1.0 && 0.0 <= lat && lat <= 1.0,
-                format!("{} {}", long, lat));
+        assert!(
+            0.0 <= long && long <= 1.0 && 0.0 <= lat && lat <= 1.0,
+            format!("{} {}", long, lat)
+        );
         let x = self.x_max as CpuScalar * long.min(0.999).max(0.001);
         let y = self.y_max as CpuScalar * lat.min(0.999).max(0.001);
 
@@ -149,22 +163,26 @@ impl ScalarField2 for Heightmap {
         //              hxy);
         // }
 
-        assert!(hxy.is_finite(),
-                format!("long: {} lat: {} -> xy: {} {} {} {} | h: {} {} {} {} | \
+        assert!(
+            hxy.is_finite(),
+            format!(
+                "long: {} lat: {} -> xy: {} {} {} {} | h: {} {} {} {} | \
                          hxy: {} {} {}",
-                        long,
-                        lat,
-                        x0,
-                        x1,
-                        y0,
-                        y1,
-                        h00,
-                        h01,
-                        h10,
-                        h11,
-                        hx0,
-                        hx1,
-                        hxy));
+                long,
+                lat,
+                x0,
+                x1,
+                y0,
+                y1,
+                h00,
+                h01,
+                h10,
+                h11,
+                hx0,
+                hx1,
+                hxy
+            )
+        );
         hxy
     }
 }
@@ -177,8 +195,7 @@ impl ScalarField3 for Heightmap {
         let lat = (position[1] / r).acos() * FRAC_1_PI;
 
         let field_radius = self.radius +
-                           <Self as ScalarField2>::value_at(self, &(Point2::new(long, lat))) /
-                           1000.0;
+            <Self as ScalarField2>::value_at(self, &(Point2::new(long, lat))) / 1000.0;
 
         r - field_radius
     }

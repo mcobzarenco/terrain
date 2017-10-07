@@ -23,20 +23,29 @@ impl App {
         Ok(App {
             window: window,
             input: input,
-            camera: Camera::new(Point3f::new(0.0, 0.0, 0.0),
-                                Point3f::new(0.0, 0.0, 1.0),
-                                Vec3f::new(0.0, 1.0, 0.0)),
+            camera: Camera::new(
+                Point3f::new(0.0, 0.0, 0.0),
+                Point3f::new(0.0, 0.0, 1.0),
+                Vec3f::new(0.0, 1.0, 0.0),
+            ),
             thread_pool: ThreadPool::new(num_workers),
         })
     }
 
     pub fn run(&mut self, planet_field: PlanetField) -> Result<()> {
-        let App { ref mut input, ref thread_pool, ref mut window, .. } = *self;
+        let App {
+            ref mut input,
+            ref thread_pool,
+            ref mut window,
+            ..
+        } = *self;
 
-        let heightmap = try!(Heightmap::from_pds(3396.0,
-                                                 11520 * 4,
-                                                 5632 * 4,
-                                                 "/home/marius/w/terrain/assets/128/megdr-128-stiched.img")); 
+        let heightmap = try!(Heightmap::from_pds(
+            3396.0,
+            11520 * 4,
+            5632 * 4,
+            "/home/marius/w/terrain/assets/128/megdr-128-stiched.img",
+        ));
         // let heightmap = try!(Heightmap::from_image(3396.0,
         //                                            "/home/marius/w/terrain/assets/earth-21600x10800.jpg"));
 
@@ -45,8 +54,10 @@ impl App {
         // try!(skybox.load(window, "/home/marius/w/terrain/assets/skybox-galaxy.jpg"));
         info!("Loaded the skybox.");
 
-        let quit_gesture = Gesture::AnyOf(vec![Gesture::QuitTrigger,
-                                               Gesture::KeyDownTrigger(KeyCode::Escape)]);
+        let quit_gesture = Gesture::AnyOf(vec![
+            Gesture::QuitTrigger,
+            Gesture::KeyDownTrigger(KeyCode::Escape),
+        ]);
 
         info!("Entering main loop.");
         let mut running = true;
@@ -56,13 +67,16 @@ impl App {
             let mut target = window.draw();
 
             let player_pos = planet.player.update_position();
-            self.camera.observer_mut().set_translation(player_pos.translation());
-            self.camera.observer_mut().set_rotation(player_pos.rotation());
+            self.camera.observer_mut().set_translation(
+                player_pos.translation(),
+            );
+            self.camera.observer_mut().set_rotation(
+                player_pos.rotation(),
+            );
 
             // try!(skybox.render(&mut target, &mut self.camera));
             try!(planet.render(window, &mut target, &mut self.camera));
-            try!(target.finish()
-                .chain_err(|| "Could not render frame."));
+            try!(target.finish().chain_err(|| "Could not render frame."));
 
             let elapsed = time.elapsed();
             let delta = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 * 1e-9;

@@ -14,12 +14,14 @@ pub struct Window {
 
 impl Window {
     pub fn new<'a>(width: u32, height: u32, title: &str) -> Result<Window> {
-        let facade = try!(WindowBuilder::new()
-            .with_title(title)
-            .with_dimensions(width, height)
-            .with_depth_buffer(24)
-            .build_glium()
-            .chain_err(|| "Could not create a Glutin window."));
+        let facade = try!(
+            WindowBuilder::new()
+                .with_title(title)
+                .with_dimensions(width, height)
+                .with_depth_buffer(24)
+                .build_glium()
+                .chain_err(|| "Could not create a Glutin window.")
+        );
 
         Ok(Window { facade: facade })
     }
@@ -27,7 +29,9 @@ impl Window {
     pub fn size(&self) -> WindowInnerSize {
         let (width, height) = self.facade
             .get_window()
-            .expect("Could not get a reference to the current window; no window?")
+            .expect(
+                "Could not get a reference to the current window; no window?",
+            )
             .get_inner_size_pixels()
             .expect("Could not get the size of the window.");
         WindowInnerSize {
@@ -75,17 +79,24 @@ impl Window {
     }
 
     pub fn program(&self, vertex_src: &str, fragment_src: &str) -> Result<Program> {
-        Program::from_source(&self.facade,
-                             &format!("#version {}\n{}",
-                                      GLSL_VERSION_STRING,
-                                      try!(read_utf8_file(vertex_src)
-                                          .chain_err(|| "Failed to read vertex shader."))),
-                             &format!("#version {}\n{}",
-                                      GLSL_VERSION_STRING,
-                                      try!(read_utf8_file(fragment_src)
-                                          .chain_err(|| "Failed to read fragment shader."))),
-                             None)
-            .chain_err(|| "Failed to build program.")
+        Program::from_source(
+            &self.facade,
+            &format!(
+                "#version {}\n{}",
+                GLSL_VERSION_STRING,
+                try!(read_utf8_file(vertex_src).chain_err(
+                    || "Failed to read vertex shader.",
+                ))
+            ),
+            &format!(
+                "#version {}\n{}",
+                GLSL_VERSION_STRING,
+                try!(read_utf8_file(fragment_src).chain_err(
+                    || "Failed to read fragment shader.",
+                ))
+            ),
+            None,
+        ).chain_err(|| "Failed to build program.")
     }
 }
 

@@ -17,7 +17,8 @@ use gfx::{marching_cubes, BarycentricVertex, Camera, Mesh, Window};
 use math::{GpuScalar, Vec3f, ScalarField3};
 
 pub struct LevelOfDetail<'a, Field>
-    where Field: ScalarField3
+where
+    Field: ScalarField3,
 {
     chunk_renderer: ChunkRenderer<'a, Field>,
     octree: Octree,
@@ -26,13 +27,14 @@ pub struct LevelOfDetail<'a, Field>
 }
 
 impl<'a, Field: 'static + ScalarField3 + Send + Sync> LevelOfDetail<'a, Field> {
-    pub fn new(scalar_field: Arc<Field>,
-               thread_pool: &'a ThreadPool,
-               max_level: u8,
-               step: f32,
-               size: f32,
-               uid_start: usize)
-               -> Self {
+    pub fn new(
+        scalar_field: Arc<Field>,
+        thread_pool: &'a ThreadPool,
+        max_level: u8,
+        step: f32,
+        size: f32,
+        uid_start: usize,
+    ) -> Self {
         LevelOfDetail {
             chunk_renderer: ChunkRenderer::new(scalar_field.clone(), thread_pool, uid_start),
             octree: Octree::new(Vec3f::zero() - size / 2.0, size),
@@ -42,11 +44,17 @@ impl<'a, Field: 'static + ScalarField3 + Send + Sync> LevelOfDetail<'a, Field> {
     }
 
     pub fn update(&mut self, window: &Window, camera: &Camera) -> Result<Vec<&Chunk>> {
-        let (draw_chunk_ids, fetch_chunk_ids) = self.octree
-            .rebuild(self.max_level,
-                     Vec3f::from(camera.position().translation()),
-                     &mut self.chunk_renderer);
-        self.chunk_renderer.render(window, &draw_chunk_ids, fetch_chunk_ids)
+        let (draw_chunk_ids, fetch_chunk_ids) =
+            self.octree.rebuild(
+                self.max_level,
+                Vec3f::from(camera.position().translation()),
+                &mut self.chunk_renderer,
+            );
+        self.chunk_renderer.render(
+            window,
+            &draw_chunk_ids,
+            fetch_chunk_ids,
+        )
     }
 }
 
@@ -58,16 +66,21 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    fn new(uid: usize,
-           window: &Window,
-           mesh: Mesh<BarycentricVertex>,
-           tri_mesh: TriMeshHandle)
-           -> Result<Self> {
-        let vertex_buffer = try!(VertexBuffer::new(window.facade(), &mesh.vertices)
-            .chain_err(|| "Cannot create vertex buffer."));
+    fn new(
+        uid: usize,
+        window: &Window,
+        mesh: Mesh<BarycentricVertex>,
+        tri_mesh: TriMeshHandle,
+    ) -> Result<Self> {
+        let vertex_buffer = try!(
+            VertexBuffer::new(window.facade(), &mesh.vertices)
+                .chain_err(|| "Cannot create vertex buffer.")
+        );
         let index_buffer =
-            try!(IndexBuffer::new(window.facade(), PrimitiveType::TrianglesList, &mesh.indices)
-                .chain_err(|| "Cannot create index buffer."));
+            try!(
+                IndexBuffer::new(window.facade(), PrimitiveType::TrianglesList, &mesh.indices)
+                    .chain_err(|| "Cannot create index buffer.")
+            );
 
         Ok(Chunk {
             uid: uid,
@@ -78,13 +91,15 @@ impl Chunk {
     }
 }
 
-fn field_to_mesh<Field>(scalar_field: &Field,
-                        position: Vec3f,
-                        size: f32,
-                        step: f32,
-                        iso_value: f32)
-                        -> Result<Mesh<BarycentricVertex>>
-    where Field: ScalarField3
+fn field_to_mesh<Field>(
+    scalar_field: &Field,
+    position: Vec3f,
+    size: f32,
+    step: f32,
+    iso_value: f32,
+) -> Result<Mesh<BarycentricVertex>>
+where
+    Field: ScalarField3,
 {
     let time = Instant::now();
     let p = position + size;
@@ -92,11 +107,13 @@ fn field_to_mesh<Field>(scalar_field: &Field,
         .with_barycentric_coordinates();
     let elapsed = time.elapsed();
     let delta = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 * 1e-9;
-    debug!("Took {:.2}s to create chunk at {:?} (size {:?}) from field ({:?} vertices)",
-           delta,
-           position,
-           size,
-           mesh.vertices.len());
+    debug!(
+        "Took {:.2}s to create chunk at {:?} (size {:?}) from field ({:?} vertices)",
+        delta,
+        position,
+        size,
+        mesh.vertices.len()
+    );
     Ok(mesh)
 }
 
@@ -116,14 +133,20 @@ impl Octree {
         octree
     }
 
-    fn rebuild<Cache>(&mut self,
-                      max_level: u8,
-                      focus: Vec3f,
-                      chunk_cache: &mut Cache)
-                      -> (Vec<ChunkId>, Vec<ChunkId>)
-        where Cache: ChunkCache
+    fn rebuild<Cache>(
+        &mut self,
+        max_level: u8,
+        focus: Vec3f,
+        chunk_cache: &mut Cache,
+    ) -> (Vec<ChunkId>, Vec<ChunkId>)
+    where
+        Cache: ChunkCache,
     {
-        let Octree { ref mut nodes, ref mut node_stack, ref root } = *self;
+        let Octree {
+            ref mut nodes,
+            ref mut node_stack,
+            ref root,
+        } = *self;
 
         assert!(node_stack.is_empty());
         nodes.clear();
@@ -146,20 +169,29 @@ impl Octree {
         (draw_chunk_ids, fetch_chunk_ids)
     }
 
-    fn extend_node<Cache>(node_stack: &mut VecDeque<usize>,
-                          nodes: &mut Vec<OctreeNode>,
-                          max_level: u8,
-                          focus: Vec3f,
-                          chunk_cache: &mut Cache)
-        where Cache: ChunkCache
+    fn extend_node<Cache>(
+        node_stack: &mut VecDeque<usize>,
+        nodes: &mut Vec<OctreeNode>,
+        max_level: u8,
+        focus: Vec3f,
+        chunk_cache: &mut Cache,
+    ) where
+        Cache: ChunkCache,
     {
         while !node_stack.is_empty() {
             let current_index = node_stack.pop_front().expect("unexpected empty node stack");
-            let OctreeNode { size, position, chunk_id, level, .. } = nodes[current_index];
+            let OctreeNode {
+                size,
+                position,
+                chunk_id,
+                level,
+                ..
+            } = nodes[current_index];
 
             let is_available = chunk_cache.is_available(&chunk_id);
             if !is_available || level >= max_level ||
-               distance_to_cube(&position, size, &focus) > 2.5 * size {
+                distance_to_cube(&position, size, &focus) > 2.5 * size
+            {
                 if !is_available {
                     nodes[current_index].draw = false;
                 }
@@ -169,18 +201,21 @@ impl Octree {
                     Some(Octree::new_children_indices(first_child_index));
                 let (children_positions, child_size) = Octree::children_positions(&position, size);
                 for (num_child, &child_position) in children_positions.iter().enumerate() {
-                    nodes.push(OctreeNode::new(child_position, child_size, level + 1, false));
+                    nodes.push(OctreeNode::new(
+                        child_position,
+                        child_size,
+                        level + 1,
+                        false,
+                    ));
                     node_stack.push_back(nodes[current_index].children.unwrap()[num_child]);
                 }
                 let draw_children = if nodes[current_index].draw {
-                    let missing_child = nodes[current_index]
-                        .children
-                        .unwrap()
-                        .iter()
-                        .any(|child_index| {
+                    let missing_child = nodes[current_index].children.unwrap().iter().any(
+                        |child_index| {
                             !(chunk_cache.is_available(&nodes[*child_index].chunk_id) ||
-                              chunk_cache.is_empty(&nodes[*child_index].chunk_id))
-                        });
+                                  chunk_cache.is_empty(&nodes[*child_index].chunk_id))
+                        },
+                    );
                     !missing_child
                 } else {
                     false
@@ -199,32 +234,38 @@ impl Octree {
 
     #[inline]
     fn new_children_indices(next_index: usize) -> [usize; 8] {
-        [next_index,
-         next_index + 1,
-         next_index + 2,
-         next_index + 3,
-         next_index + 4,
-         next_index + 5,
-         next_index + 6,
-         next_index + 7]
+        [
+            next_index,
+            next_index + 1,
+            next_index + 2,
+            next_index + 3,
+            next_index + 4,
+            next_index + 5,
+            next_index + 6,
+            next_index + 7,
+        ]
     }
 
     #[inline]
     fn children_positions(position: &Vec3f, size: f32) -> ([Vec3f; 8], f32) {
         let child_size = size / 2.0;
         let make_position = |position: &Vec3f, offset: (f32, f32, f32)| -> Vec3f {
-            Vec3f::new(position[0] + child_size * offset.0,
-                       position[1] + child_size * offset.1,
-                       position[2] + child_size * offset.2)
+            Vec3f::new(
+                position[0] + child_size * offset.0,
+                position[1] + child_size * offset.1,
+                position[2] + child_size * offset.2,
+            )
         };
-        let positions = [make_position(position, OCTREE_OFFSETS[0]),
-                         make_position(position, OCTREE_OFFSETS[1]),
-                         make_position(position, OCTREE_OFFSETS[2]),
-                         make_position(position, OCTREE_OFFSETS[3]),
-                         make_position(position, OCTREE_OFFSETS[4]),
-                         make_position(position, OCTREE_OFFSETS[5]),
-                         make_position(position, OCTREE_OFFSETS[6]),
-                         make_position(position, OCTREE_OFFSETS[7])];
+        let positions = [
+            make_position(position, OCTREE_OFFSETS[0]),
+            make_position(position, OCTREE_OFFSETS[1]),
+            make_position(position, OCTREE_OFFSETS[2]),
+            make_position(position, OCTREE_OFFSETS[3]),
+            make_position(position, OCTREE_OFFSETS[4]),
+            make_position(position, OCTREE_OFFSETS[5]),
+            make_position(position, OCTREE_OFFSETS[6]),
+            make_position(position, OCTREE_OFFSETS[7]),
+        ];
         (positions, child_size)
     }
 }
@@ -258,17 +299,21 @@ pub struct ChunkId(i32, i32, i32, u32);
 impl ChunkId {
     #[inline]
     fn new(position: &Vec3f, size: f32) -> Self {
-        ChunkId((position[0] * OCTREE_VOXEL_DENSITY).floor() as i32,
-                (position[1] * OCTREE_VOXEL_DENSITY).floor() as i32,
-                (position[2] * OCTREE_VOXEL_DENSITY).floor() as i32,
-                (size * OCTREE_VOXEL_DENSITY) as u32)
+        ChunkId(
+            (position[0] * OCTREE_VOXEL_DENSITY).floor() as i32,
+            (position[1] * OCTREE_VOXEL_DENSITY).floor() as i32,
+            (position[2] * OCTREE_VOXEL_DENSITY).floor() as i32,
+            (size * OCTREE_VOXEL_DENSITY) as u32,
+        )
     }
 
     #[inline]
     pub fn position(&self) -> Vec3f {
-        Vec3f::new(self.0 as f32 / OCTREE_VOXEL_DENSITY,
-                   self.1 as f32 / OCTREE_VOXEL_DENSITY,
-                   self.2 as f32 / OCTREE_VOXEL_DENSITY)
+        Vec3f::new(
+            self.0 as f32 / OCTREE_VOXEL_DENSITY,
+            self.1 as f32 / OCTREE_VOXEL_DENSITY,
+            self.2 as f32 / OCTREE_VOXEL_DENSITY,
+        )
     }
 
     #[inline]
@@ -278,20 +323,31 @@ impl ChunkId {
 }
 
 const OCTREE_VOXEL_DENSITY: f32 = 8.0;
-const OCTREE_OFFSETS: [(f32, f32, f32); 8] = [(0.0, 0.0, 0.0),
-                                              (0.0, 0.0, 1.0),
-                                              (0.0, 1.0, 0.0),
-                                              (1.0, 0.0, 0.0),
-                                              (0.0, 1.0, 1.0),
-                                              (1.0, 0.0, 1.0),
-                                              (1.0, 1.0, 0.0),
-                                              (1.0, 1.0, 1.0)];
+const OCTREE_OFFSETS: [(f32, f32, f32); 8] = [
+    (0.0, 0.0, 0.0),
+    (0.0, 0.0, 1.0),
+    (0.0, 1.0, 0.0),
+    (1.0, 0.0, 0.0),
+    (0.0, 1.0, 1.0),
+    (1.0, 0.0, 1.0),
+    (1.0, 1.0, 0.0),
+    (1.0, 1.0, 1.0),
+];
 
 #[inline]
 fn distance_to_cube(cube_position: &Vec3f, size: f32, query: &Vec3f) -> f32 {
-    let dx = (cube_position[0] - query[0]).max(0.0).max(query[0] - cube_position[0] - size);
-    let dy = (cube_position[1] - query[1]).max(0.0).max(query[1] - cube_position[1] - size);
-    let dz = (cube_position[2] - query[2]).max(0.0).max(query[2] - cube_position[2] - size);
+    let dx = (cube_position[0] - query[0]).max(0.0).max(
+        query[0] - cube_position[0] -
+            size,
+    );
+    let dy = (cube_position[1] - query[1]).max(0.0).max(
+        query[1] - cube_position[1] -
+            size,
+    );
+    let dz = (cube_position[2] - query[2]).max(0.0).max(
+        query[2] - cube_position[2] -
+            size,
+    );
     (dx * dx + dy * dy + dz * dz).sqrt()
 }
 
@@ -319,7 +375,8 @@ struct ChunkRenderer<'a, Field: ScalarField3> {
 }
 
 impl<'a, Field> ChunkRenderer<'a, Field>
-    where Field: 'static + ScalarField3 + Send + Sync
+where
+    Field: 'static + ScalarField3 + Send + Sync,
 {
     fn new(scalar_field: Arc<Field>, thread_pool: &'a ThreadPool, uid_start: usize) -> Self {
         let (send, recv) = chan::sync(128);
@@ -335,11 +392,12 @@ impl<'a, Field> ChunkRenderer<'a, Field>
         }
     }
 
-    fn render(&mut self,
-              window: &Window,
-              draw_chunk_ids: &Vec<ChunkId>,
-              fetch_chunk_ids: Vec<ChunkId>)
-              -> Result<Vec<&Chunk>> {
+    fn render(
+        &mut self,
+        window: &Window,
+        draw_chunk_ids: &Vec<ChunkId>,
+        fetch_chunk_ids: Vec<ChunkId>,
+    ) -> Result<Vec<&Chunk>> {
 
         // The invariant required to hold when calling this function is:
         //   - the meshes for all `draw_chunk_ids` are available
@@ -349,26 +407,31 @@ impl<'a, Field> ChunkRenderer<'a, Field>
         //     `get_chunk_state(&chunk_id) == ChunkState::Available`
         // println!("draw: {:?}", draw_chunk_ids);
 
-        assert!(draw_chunk_ids.iter()
-            .all(|chunk_id| self.get_chunk_state(chunk_id) == ChunkState::Available));
-        assert!(fetch_chunk_ids.iter()
-            .all(|chunk_id| self.get_chunk_state(chunk_id) == ChunkState::Unknown));
+        assert!(draw_chunk_ids.iter().all(|chunk_id| {
+            self.get_chunk_state(chunk_id) == ChunkState::Available
+        }));
+        assert!(fetch_chunk_ids.iter().all(|chunk_id| {
+            self.get_chunk_state(chunk_id) == ChunkState::Unknown
+        }));
 
-        let ChunkRenderer { ref scalar_field,
-                            ref thread_pool,
-                            ref chunk_send,
-                            ref chunk_recv,
-                            ref mut loaded_chunks,
-                            ref mut pending_chunks,
-                            ref mut empty_chunks,
-                            .. } = *self;
+        let ChunkRenderer {
+            ref scalar_field,
+            ref thread_pool,
+            ref chunk_send,
+            ref chunk_recv,
+            ref mut loaded_chunks,
+            ref mut pending_chunks,
+            ref mut empty_chunks,
+            ..
+        } = *self;
 
         while let Some(message) = (|| {
             chan_select! {
                 default => { return None; },
                 chunk_recv.recv() -> message => { return message; },
             }
-        })() {
+        })()
+        {
             let ChunkRendererWork { chunk_id, meshes } = message;
 
             pending_chunks.remove(&chunk_id);
@@ -377,8 +440,10 @@ impl<'a, Field> ChunkRenderer<'a, Field>
                     empty_chunks.insert(chunk_id, ());
                 }
                 ChunkMeshes::Present(mesh, tri_mesh) => {
-                    loaded_chunks.insert(chunk_id,
-                                         try!(Chunk::new(self.empty_uid, window, mesh, tri_mesh)));
+                    loaded_chunks.insert(
+                        chunk_id,
+                        try!(Chunk::new(self.empty_uid, window, mesh, tri_mesh)),
+                    );
                     self.empty_uid += 1;
                 }
             }
@@ -398,32 +463,35 @@ impl<'a, Field> ChunkRenderer<'a, Field>
             let scalar_field = scalar_field.clone();
             let sender = chunk_send.clone();
             thread_pool.execute(move || {
-                let mesh = field_to_mesh(scalar_field.deref(),
-                                         position,
-                                         chunk_size + step_size,
-                                         step_size,
-                                         0.0)
-                    .unwrap();
+                let mesh = field_to_mesh(
+                    scalar_field.deref(),
+                    position,
+                    chunk_size + step_size,
+                    step_size,
+                    0.0,
+                ).unwrap();
                 if mesh.vertices.len() == 0 {
                     sender.send(ChunkRendererWork {
                         chunk_id: chunk_id,
                         meshes: ChunkMeshes::Empty,
                     });
                 } else {
-                    let tri_mesh = TriMesh::new(Arc::new(mesh.vertices
-                                                    .iter()
-                                                    .map(|x| x.position.to_point())
-                                                    .collect()),
-                                                Arc::new(mesh.indices
-                                                    .chunks(3)
-                                                    .map(|x| {
-                                                        Point3::new(x[0] as usize,
-                                                                    x[1] as usize,
-                                                                    x[2] as usize)
-                                                    })
-                                                    .collect()),
-                                                None,
-                                                None);
+                    let tri_mesh = TriMesh::new(
+                        Arc::new(
+                            mesh.vertices
+                                .iter()
+                                .map(|x| x.position.to_point())
+                                .collect(),
+                        ),
+                        Arc::new(
+                            mesh.indices
+                                .chunks(3)
+                                .map(|x| Point3::new(x[0] as usize, x[1] as usize, x[2] as usize))
+                                .collect(),
+                        ),
+                        None,
+                        None,
+                    );
                     sender.send(ChunkRendererWork {
                         chunk_id: chunk_id,
                         meshes: ChunkMeshes::Present(mesh, ShapeHandle::new(tri_mesh)),
@@ -438,8 +506,10 @@ impl<'a, Field> ChunkRenderer<'a, Field>
             if let Some(chunk) = loaded_chunks.peek(chunk_id) {
                 draw_chunks.push(chunk);
             } else {
-                warn!("A chunk needed to be drawn was evicted after collecting new chunks from \
-                       workers, increase the LRU chunk cache size.");
+                warn!(
+                    "A chunk needed to be drawn was evicted after collecting new chunks from \
+                       workers, increase the LRU chunk cache size."
+                );
             }
         }
 
@@ -476,13 +546,15 @@ trait ChunkCache {
 }
 
 impl<'a, Field> ChunkCache for ChunkRenderer<'a, Field>
-    where Field: 'static + ScalarField3 + Send + Sync
+where
+    Field: 'static + ScalarField3 + Send + Sync,
 {
     #[inline]
     fn get_chunk_state(&mut self, chunk_id: &ChunkId) -> ChunkState {
         if self.loaded_chunks.get(chunk_id).is_some() {
-            assert!(!self.empty_chunks.contains_key(chunk_id) &&
-                    !self.pending_chunks.contains(chunk_id));
+            assert!(
+                !self.empty_chunks.contains_key(chunk_id) && !self.pending_chunks.contains(chunk_id)
+            );
             ChunkState::Available
         } else if self.empty_chunks.contains_key(chunk_id) {
             assert!(!self.pending_chunks.contains(chunk_id));

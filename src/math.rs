@@ -17,9 +17,9 @@ pub trait ScalarField2 {
         let x_perturb = Vector2::x() * EPS;
         let y_perturb = Vector2::y() * EPS;
         let dx = (self.value_at(&(position + x_perturb)) -
-                  self.value_at(&(position - x_perturb))) / EPS2;
+                      self.value_at(&(position - x_perturb))) / EPS2;
         let dy = (self.value_at(&(position + y_perturb)) -
-                  self.value_at(&(position - y_perturb))) / EPS2;
+                      self.value_at(&(position - y_perturb))) / EPS2;
         Vector2::new(dx, dy)
     }
 }
@@ -36,11 +36,11 @@ pub trait ScalarField3 {
         let y_perturb = Vector3::y() * EPS;
         let z_perturb = Vector3::z() * EPS;
         let dx = (self.value_at(&(position + x_perturb)) -
-                  self.value_at(&(position - x_perturb))) / EPS2;
+                      self.value_at(&(position - x_perturb))) / EPS2;
         let dy = (self.value_at(&(position + y_perturb)) -
-                  self.value_at(&(position - y_perturb))) / EPS2;
+                      self.value_at(&(position - y_perturb))) / EPS2;
         let dz = (self.value_at(&(position + z_perturb)) -
-                  self.value_at(&(position - z_perturb))) / EPS2;
+                      self.value_at(&(position - z_perturb))) / EPS2;
         Vector3::new(dx, dy, dz)
     }
 }
@@ -198,44 +198,48 @@ custom_derive! {
 }
 
 impl Matrix4f {
-    pub fn new(m11: GpuScalar,
-               m21: GpuScalar,
-               m31: GpuScalar,
-               m41: GpuScalar,
-               m12: GpuScalar,
-               m22: GpuScalar,
-               m32: GpuScalar,
-               m42: GpuScalar,
-               m13: GpuScalar,
-               m23: GpuScalar,
-               m33: GpuScalar,
-               m43: GpuScalar,
-               m14: GpuScalar,
-               m24: GpuScalar,
-               m34: GpuScalar,
-               m44: GpuScalar)
-               -> Self {
-        Matrix4f::from(Matrix4::new(m11,
-                                    m21,
-                                    m31,
-                                    m41,
-                                    m12,
-                                    m22,
-                                    m32,
-                                    m42,
-                                    m13,
-                                    m23,
-                                    m33,
-                                    m43,
-                                    m14,
-                                    m24,
-                                    m34,
-                                    m44))
+    pub fn new(
+        m11: GpuScalar,
+        m21: GpuScalar,
+        m31: GpuScalar,
+        m41: GpuScalar,
+        m12: GpuScalar,
+        m22: GpuScalar,
+        m32: GpuScalar,
+        m42: GpuScalar,
+        m13: GpuScalar,
+        m23: GpuScalar,
+        m33: GpuScalar,
+        m43: GpuScalar,
+        m14: GpuScalar,
+        m24: GpuScalar,
+        m34: GpuScalar,
+        m44: GpuScalar,
+    ) -> Self {
+        Matrix4f::from(Matrix4::new(
+            m11,
+            m21,
+            m31,
+            m41,
+            m12,
+            m22,
+            m32,
+            m42,
+            m13,
+            m23,
+            m33,
+            m43,
+            m14,
+            m24,
+            m34,
+            m44,
+        ))
     }
 }
 
 impl<T> From<T> for Matrix4f
-    where Matrix4<GpuScalar>: From<T>
+where
+    Matrix4<GpuScalar>: From<T>,
 {
     fn from(value: T) -> Self {
         Matrix4f(Matrix4::from(value))

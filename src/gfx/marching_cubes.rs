@@ -4,12 +4,13 @@ use nalgebra::{Norm, Point3, Vector3};
 use math::{ScalarField3, Vec3f};
 use super::mesh::{Mesh, Vertex, triangle_normal};
 
-pub fn marching_cubes<Field: ScalarField3>(field: &Field,
-                                           min: &Vec3f,
-                                           max: &Vec3f,
-                                           step: f32,
-                                           iso_value: f32)
-                                           -> Mesh<Vertex> {
+pub fn marching_cubes<Field: ScalarField3>(
+    field: &Field,
+    min: &Vec3f,
+    max: &Vec3f,
+    step: f32,
+    iso_value: f32,
+) -> Mesh<Vertex> {
     let mut vertices = vec![];
     let mut indices = vec![];
 
@@ -46,157 +47,181 @@ pub fn marching_cubes<Field: ScalarField3>(field: &Field,
                 // edge 0
                 if edges & 0x001 != 0 {
                     index_map[0] = vertices.len();
-                    let vertex = intersection_vertex(x,
-                                                     y,
-                                                     z,
-                                                     x_dx,
-                                                     Axis::X,
-                                                     values_on_cube[0],
-                                                     values_on_cube[1],
-                                                     iso_value);
+                    let vertex = intersection_vertex(
+                        x,
+                        y,
+                        z,
+                        x_dx,
+                        Axis::X,
+                        values_on_cube[0],
+                        values_on_cube[1],
+                        iso_value,
+                    );
                     vertices.push(vertex);
                 }
                 // edge 1
                 if edges & 0x002 != 0 {
                     index_map[1] = vertices.len();
-                    let vertex = intersection_vertex(x_dx,
-                                                     y,
-                                                     z,
-                                                     y_dy,
-                                                     Axis::Y,
-                                                     values_on_cube[1],
-                                                     values_on_cube[2],
-                                                     iso_value);
+                    let vertex = intersection_vertex(
+                        x_dx,
+                        y,
+                        z,
+                        y_dy,
+                        Axis::Y,
+                        values_on_cube[1],
+                        values_on_cube[2],
+                        iso_value,
+                    );
                     vertices.push(vertex);
                 }
                 // edge 2
                 if edges & 0x004 != 0 {
                     index_map[2] = vertices.len();
-                    let vertex = intersection_vertex(x_dx,
-                                                     y_dy,
-                                                     z,
-                                                     x,
-                                                     Axis::X,
-                                                     values_on_cube[2],
-                                                     values_on_cube[3],
-                                                     iso_value);
+                    let vertex = intersection_vertex(
+                        x_dx,
+                        y_dy,
+                        z,
+                        x,
+                        Axis::X,
+                        values_on_cube[2],
+                        values_on_cube[3],
+                        iso_value,
+                    );
                     vertices.push(vertex);
                 }
                 // edge 3
                 if edges & 0x008 != 0 {
                     index_map[3] = vertices.len();
-                    let vertex = intersection_vertex(x,
-                                                     y_dy,
-                                                     z,
-                                                     y,
-                                                     Axis::Y,
-                                                     values_on_cube[3],
-                                                     values_on_cube[0],
-                                                     iso_value);
+                    let vertex = intersection_vertex(
+                        x,
+                        y_dy,
+                        z,
+                        y,
+                        Axis::Y,
+                        values_on_cube[3],
+                        values_on_cube[0],
+                        iso_value,
+                    );
                     vertices.push(vertex);
                 }
                 // edge 4
                 if edges & 0x010 != 0 {
                     index_map[4] = vertices.len();
-                    let vertex = intersection_vertex(x,
-                                                     y,
-                                                     z_dz,
-                                                     x_dx,
-                                                     Axis::X,
-                                                     values_on_cube[4],
-                                                     values_on_cube[5],
-                                                     iso_value);
+                    let vertex = intersection_vertex(
+                        x,
+                        y,
+                        z_dz,
+                        x_dx,
+                        Axis::X,
+                        values_on_cube[4],
+                        values_on_cube[5],
+                        iso_value,
+                    );
                     vertices.push(vertex);
                 }
                 // edge 5
                 if edges & 0x020 != 0 {
                     index_map[5] = vertices.len();
-                    let vertex = intersection_vertex(x_dx,
-                                                     y,
-                                                     z_dz,
-                                                     y_dy,
-                                                     Axis::Y,
-                                                     values_on_cube[5],
-                                                     values_on_cube[6],
-                                                     iso_value);
+                    let vertex = intersection_vertex(
+                        x_dx,
+                        y,
+                        z_dz,
+                        y_dy,
+                        Axis::Y,
+                        values_on_cube[5],
+                        values_on_cube[6],
+                        iso_value,
+                    );
                     vertices.push(vertex);
                 }
                 // edge 6
                 if edges & 0x040 != 0 {
                     index_map[6] = vertices.len();
-                    let vertex = intersection_vertex(x_dx,
-                                                     y_dy,
-                                                     z_dz,
-                                                     x,
-                                                     Axis::X,
-                                                     values_on_cube[6],
-                                                     values_on_cube[7],
-                                                     iso_value);
+                    let vertex = intersection_vertex(
+                        x_dx,
+                        y_dy,
+                        z_dz,
+                        x,
+                        Axis::X,
+                        values_on_cube[6],
+                        values_on_cube[7],
+                        iso_value,
+                    );
                     vertices.push(vertex);
                 }
                 // edge 7
                 if edges & 0x080 != 0 {
                     index_map[7] = vertices.len();
-                    let vertex = intersection_vertex(x,
-                                                     y_dy,
-                                                     z_dz,
-                                                     y,
-                                                     Axis::Y,
-                                                     values_on_cube[7],
-                                                     values_on_cube[4],
-                                                     iso_value);
+                    let vertex = intersection_vertex(
+                        x,
+                        y_dy,
+                        z_dz,
+                        y,
+                        Axis::Y,
+                        values_on_cube[7],
+                        values_on_cube[4],
+                        iso_value,
+                    );
                     vertices.push(vertex);
                 }
                 // edge 8
                 if edges & 0x100 != 0 {
                     index_map[8] = vertices.len();
-                    let vertex = intersection_vertex(x,
-                                                     y,
-                                                     z,
-                                                     z_dz,
-                                                     Axis::Z,
-                                                     values_on_cube[0],
-                                                     values_on_cube[4],
-                                                     iso_value);
+                    let vertex = intersection_vertex(
+                        x,
+                        y,
+                        z,
+                        z_dz,
+                        Axis::Z,
+                        values_on_cube[0],
+                        values_on_cube[4],
+                        iso_value,
+                    );
                     vertices.push(vertex);
                 }
                 // edge 9
                 if edges & 0x200 != 0 {
                     index_map[9] = vertices.len();
-                    let vertex = intersection_vertex(x_dx,
-                                                     y,
-                                                     z,
-                                                     z_dz,
-                                                     Axis::Z,
-                                                     values_on_cube[1],
-                                                     values_on_cube[5],
-                                                     iso_value);
+                    let vertex = intersection_vertex(
+                        x_dx,
+                        y,
+                        z,
+                        z_dz,
+                        Axis::Z,
+                        values_on_cube[1],
+                        values_on_cube[5],
+                        iso_value,
+                    );
                     vertices.push(vertex);
                 }
                 // edge 10
                 if edges & 0x400 != 0 {
                     index_map[10] = vertices.len();
-                    let vertex = intersection_vertex(x_dx,
-                                                     y_dy,
-                                                     z,
-                                                     z_dz,
-                                                     Axis::Z,
-                                                     values_on_cube[2],
-                                                     values_on_cube[6],
-                                                     iso_value);
+                    let vertex = intersection_vertex(
+                        x_dx,
+                        y_dy,
+                        z,
+                        z_dz,
+                        Axis::Z,
+                        values_on_cube[2],
+                        values_on_cube[6],
+                        iso_value,
+                    );
                     vertices.push(vertex);
                 }
                 // edge 11
                 if edges & 0x800 != 0 {
                     index_map[11] = vertices.len();
-                    let vertex = intersection_vertex(x,
-                                                     y_dy,
-                                                     z,
-                                                     z_dz,
-                                                     Axis::Z,
-                                                     values_on_cube[3],
-                                                     values_on_cube[7],
-                                                     iso_value);
+                    let vertex = intersection_vertex(
+                        x,
+                        y_dy,
+                        z,
+                        z_dz,
+                        Axis::Z,
+                        values_on_cube[3],
+                        values_on_cube[7],
+                        iso_value,
+                    );
                     vertices.push(vertex);
                 }
 
@@ -211,18 +236,18 @@ pub fn marching_cubes<Field: ScalarField3>(field: &Field,
                     let i1 = index_map[ix[1] as usize];
                     let i2 = index_map[ix[2] as usize];
 
-                    vertices[i0].normal =
-                        normalized_field_gradient_at_vertex::<Field>(field,
-                                                                     &vertices[i0].position) *
-                        -1.0;
-                    vertices[i1].normal =
-                        normalized_field_gradient_at_vertex::<Field>(field,
-                                                                     &vertices[i1].position) *
-                        -1.0;
-                    vertices[i2].normal =
-                        normalized_field_gradient_at_vertex::<Field>(field,
-                                                                     &vertices[i2].position) *
-                        -1.0;
+                    vertices[i0].normal = normalized_field_gradient_at_vertex::<Field>(
+                        field,
+                        &vertices[i0].position,
+                    ) * -1.0;
+                    vertices[i1].normal = normalized_field_gradient_at_vertex::<Field>(
+                        field,
+                        &vertices[i1].position,
+                    ) * -1.0;
+                    vertices[i2].normal = normalized_field_gradient_at_vertex::<Field>(
+                        field,
+                        &vertices[i2].position,
+                    ) * -1.0;
 
                     // let n = triangle_normal(&vertices[i0], &vertices[i1], &vertices[i2]);
                     // vertices[i0].normal = n;
@@ -248,22 +273,25 @@ pub fn marching_cubes<Field: ScalarField3>(field: &Field,
 }
 
 #[inline]
-fn eval_field_at_corners<Field: ScalarField3>(field: &Field,
-                                              x: f32,
-                                              y: f32,
-                                              z: f32,
-                                              x_dx: f32,
-                                              y_dy: f32,
-                                              z_dz: f32)
-                                              -> [f32; 8] {
-    [field.value_at(&Point3::new(x, y, z)),
-     field.value_at(&Point3::new(x_dx, y, z)),
-     field.value_at(&Point3::new(x_dx, y_dy, z)),
-     field.value_at(&Point3::new(x, y_dy, z)),
-     field.value_at(&Point3::new(x, y, z_dz)),
-     field.value_at(&Point3::new(x_dx, y, z_dz)),
-     field.value_at(&Point3::new(x_dx, y_dy, z_dz)),
-     field.value_at(&Point3::new(x, y_dy, z_dz))]
+fn eval_field_at_corners<Field: ScalarField3>(
+    field: &Field,
+    x: f32,
+    y: f32,
+    z: f32,
+    x_dx: f32,
+    y_dy: f32,
+    z_dz: f32,
+) -> [f32; 8] {
+    [
+        field.value_at(&Point3::new(x, y, z)),
+        field.value_at(&Point3::new(x_dx, y, z)),
+        field.value_at(&Point3::new(x_dx, y_dy, z)),
+        field.value_at(&Point3::new(x, y_dy, z)),
+        field.value_at(&Point3::new(x, y, z_dz)),
+        field.value_at(&Point3::new(x_dx, y, z_dz)),
+        field.value_at(&Point3::new(x_dx, y_dy, z_dz)),
+        field.value_at(&Point3::new(x, y_dy, z_dz)),
+    ]
 }
 
 #[inline]
@@ -278,12 +306,13 @@ fn find_cube_index(iso_value: f32, values_on_cube: [f32; 8]) -> usize {
 }
 
 #[inline]
-fn iso_value_interpolation(iso_value: f32,
-                           p1: f32,
-                           p2: f32,
-                           field_value1: f32,
-                           field_value2: f32)
-                           -> f32 {
+fn iso_value_interpolation(
+    iso_value: f32,
+    p1: f32,
+    p2: f32,
+    field_value1: f32,
+    field_value2: f32,
+) -> f32 {
     if (field_value1 - field_value2).abs() < 1e-6 {
         (p1 + p2) / 2.0
     } else {
@@ -298,15 +327,16 @@ enum Axis {
 }
 
 #[inline]
-fn intersection_vertex(mut x: f32,
-                       mut y: f32,
-                       mut z: f32,
-                       adjacent: f32,
-                       axis: Axis,
-                       field_value1: f32,
-                       field_value2: f32,
-                       iso_value: f32)
-                       -> Vertex {
+fn intersection_vertex(
+    mut x: f32,
+    mut y: f32,
+    mut z: f32,
+    adjacent: f32,
+    axis: Axis,
+    field_value1: f32,
+    field_value2: f32,
+    iso_value: f32,
+) -> Vertex {
     match axis {
         Axis::X => x = iso_value_interpolation(iso_value, x, adjacent, field_value1, field_value2),
         Axis::Y => y = iso_value_interpolation(iso_value, y, adjacent, field_value1, field_value2),
@@ -319,10 +349,13 @@ fn intersection_vertex(mut x: f32,
 }
 
 #[inline]
-fn normalized_field_gradient_at_vertex<Field: ScalarField3>(field: &ScalarField3,
-                                                            vertex: &Vec3f)
-                                                            -> Vec3f {
-    Vec3f::from(Vector3::from(field.gradient_at(vertex.as_point()).normalize()))
+fn normalized_field_gradient_at_vertex<Field: ScalarField3>(
+    field: &ScalarField3,
+    vertex: &Vec3f,
+) -> Vec3f {
+    Vec3f::from(Vector3::from(
+        field.gradient_at(vertex.as_point()).normalize(),
+    ))
 }
 
 

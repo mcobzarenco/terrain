@@ -55,7 +55,8 @@ pub struct VertexWithAttribute<A: Attribute> {
 }
 
 impl<A> NormalVertex for VertexWithAttribute<A>
-    where A: Attribute
+where
+    A: Attribute,
 {
     fn position(&self) -> &Vec3f {
         &self.position
@@ -67,16 +68,27 @@ impl<A> NormalVertex for VertexWithAttribute<A>
 }
 
 impl<A> vertex::Vertex for VertexWithAttribute<A>
-    where A: Attribute + Copy
+where
+    A: Attribute + Copy,
 {
     fn build_bindings() -> VertexFormat {
         let position_ix = size_of::<Vec3f>();
         let normal_ix = position_ix + size_of::<Vec3f>();
         let attribute_ix = normal_ix + size_of::<A>();
 
-        Cow::Owned(vec![(Cow::Borrowed("position"), position_ix, Vec3f::get_type()),
-                        (Cow::Borrowed("normal"), normal_ix, Vec3f::get_type()),
-                        (Cow::Borrowed("attribute"), attribute_ix, Vec3f::get_type())])
+        Cow::Owned(vec![
+            (
+                Cow::Borrowed("position"),
+                position_ix,
+                Vec3f::get_type()
+            ),
+            (Cow::Borrowed("normal"), normal_ix, Vec3f::get_type()),
+            (
+                Cow::Borrowed("attribute"),
+                attribute_ix,
+                Vec3f::get_type()
+            ),
+        ])
     }
 }
 
@@ -101,7 +113,11 @@ implement_vertex!(BarycentricVertex, position, normal, bary_coord);
 
 #[inline]
 pub fn triangle_normal(v1: &Vertex, v2: &Vertex, v3: &Vertex) -> Vec3f {
-    Vec3f::from((v2.position - v1.position).cross(&(v3.position - v1.position)).normalize())
+    Vec3f::from(
+        (v2.position - v1.position)
+            .cross(&(v3.position - v1.position))
+            .normalize(),
+    )
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -207,14 +223,23 @@ impl Mesh<Vertex> {
 }
 
 pub fn load_mesh_from_file(path: &str) -> Result<Vec<Mesh<Vertex>>> {
-    let contents = try!(read_utf8_file(path).chain_err(|| "Couldn't open mesh file."));
+    let contents = try!(read_utf8_file(path).chain_err(
+        || "Couldn't open mesh file.",
+    ));
     load_mesh_from_str(contents)
 }
 
 pub fn load_mesh_from_str(mesh_raw: String) -> Result<Vec<Mesh<Vertex>>> {
-    let obj_set = try!(wavefront_obj::parse(mesh_raw)
-        .map_err(|e| ErrorKind::LoadAssetError(e.message)));
-    Ok(obj_set.objects.into_iter().map(Mesh::from_wavefront_obj).collect())
+    let obj_set = try!(wavefront_obj::parse(mesh_raw).map_err(|e| {
+        ErrorKind::LoadAssetError(e.message)
+    }));
+    Ok(
+        obj_set
+            .objects
+            .into_iter()
+            .map(Mesh::from_wavefront_obj)
+            .collect(),
+    )
 }
 
 unsafe impl Attribute for Vec3f {

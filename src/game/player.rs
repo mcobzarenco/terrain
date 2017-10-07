@@ -30,9 +30,7 @@ impl Default for ControllerBindings {
                         y_negative: Gesture::KeyHold(KeyCode::Up),
                         step: 0.05,
                     },
-                    Analog2d::Mouse {
-                        sensitivity: 0.008
-                    },
+                    Analog2d::Mouse { sensitivity: 0.008 },
                 ],
             },
             jump: Gesture::KeyHold(KeyCode::Space),
@@ -48,11 +46,12 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn new(player: RigidBodyHandle<GpuScalar>,
-               position: &Point3<GpuScalar>,
-               target: &Point3<GpuScalar>,
-               up: &Vector3<GpuScalar>)
-               -> Self {
+    pub fn new(
+        player: RigidBodyHandle<GpuScalar>,
+        position: &Point3<GpuScalar>,
+        target: &Point3<GpuScalar>,
+        up: &Vector3<GpuScalar>,
+    ) -> Self {
         player.borrow_mut().set_translation(position.to_vector());
         player.borrow_mut().set_deactivation_threshold(None);
 
@@ -80,10 +79,13 @@ impl Player {
     pub fn update(&mut self, delta_time: f32, input: &Input) -> () {
         self.update_position();
         let mut player = self.player.borrow_mut();
-        if input.poll_gesture(&Gesture::AnyOf(vec![Gesture::KeyUpTrigger(KeyCode::W),
-                                                   Gesture::KeyUpTrigger(KeyCode::A),
-                                                   Gesture::KeyUpTrigger(KeyCode::S),
-                                                   Gesture::KeyUpTrigger(KeyCode::D)])) {
+        if input.poll_gesture(&Gesture::AnyOf(vec![
+            Gesture::KeyUpTrigger(KeyCode::W),
+            Gesture::KeyUpTrigger(KeyCode::A),
+            Gesture::KeyUpTrigger(KeyCode::S),
+            Gesture::KeyUpTrigger(KeyCode::D),
+        ]))
+        {
             player.clear_forces();
         }
 
@@ -110,15 +112,11 @@ impl Player {
         }
         if input.poll_gesture(&Gesture::KeyHold(KeyCode::Q)) {
             let angle = self.observer.rotation * Vector3::z() * delta_time;
-            self.observer
-                .rotation
-                .append_rotation_mut(&angle);
+            self.observer.rotation.append_rotation_mut(&angle);
         }
         if input.poll_gesture(&Gesture::KeyHold(KeyCode::E)) {
             let angle = self.observer.rotation * Vector3::z() * delta_time * -1.0;
-            self.observer
-                .rotation
-                .append_rotation_mut(&angle);
+            self.observer.rotation.append_rotation_mut(&angle);
         }
 
         let mut mouse_rel = input.poll_analog2d(&Analog2d::Sum {
@@ -130,9 +128,7 @@ impl Player {
                     y_negative: Gesture::KeyHold(KeyCode::Up),
                     step: 0.5,
                 },
-                Analog2d::Mouse {
-                    sensitivity: 0.8
-                },
+                Analog2d::Mouse { sensitivity: 0.8 },
             ],
         });
 
@@ -143,12 +139,14 @@ impl Player {
 
             let rotation = self.observer.rotation;
 
-            self.observer
-                .rotation
-                .append_rotation_mut(&(rotation * (Vector3::x() * -1.0) * vertical_angle));
-            self.observer
-                .rotation
-                .append_rotation_mut(&(rotation * (Vector3::y() * -1.0) * horizontal_angle));
+            self.observer.rotation.append_rotation_mut(
+                &(rotation * (Vector3::x() * -1.0) *
+                      vertical_angle),
+            );
+            self.observer.rotation.append_rotation_mut(
+                &(rotation * (Vector3::y() * -1.0) *
+                      horizontal_angle),
+            );
         }
     }
 }

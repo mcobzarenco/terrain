@@ -50,58 +50,86 @@ fn start_app() -> Result<()> {
         .version("0.1.0")
         .author("Marius C. <marius@reinfer.io>")
         .about("A voxel based planet generator.")
-        .arg(Arg::with_name("base_radius")
-            .long("base-radius")
-            .value_name("f32")
-            .takes_value(true))
-        .arg(Arg::with_name("deviation")
-            .long("deviation")
-            .value_name("f32")
-            .takes_value(true))
-        .arg(Arg::with_name("num_octaves")
-            .long("num-octaves")
-            .value_name("usize")
-            .takes_value(true))
-        .arg(Arg::with_name("persistence")
-            .long("persistence")
-            .value_name("f32")
-            .takes_value(true))
-        .arg(Arg::with_name("wavelength")
-            .long("wavelength")
-            .value_name("f32")
-            .takes_value(true))
-        .arg(Arg::with_name("lacunarity")
-            .long("lacunarity")
-            .value_name("f32")
-            .takes_value(true))
-        .arg(Arg::with_name("width")
-            .long("width")
-            .value_name("u32")
-            .takes_value(true))
-        .arg(Arg::with_name("height")
-            .long("height")
-            .value_name("u32")
-            .takes_value(true))
+        .arg(
+            Arg::with_name("base_radius")
+                .long("base-radius")
+                .value_name("f32")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("deviation")
+                .long("deviation")
+                .value_name("f32")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("num_octaves")
+                .long("num-octaves")
+                .value_name("usize")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("persistence")
+                .long("persistence")
+                .value_name("f32")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("wavelength")
+                .long("wavelength")
+                .value_name("f32")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("lacunarity")
+                .long("lacunarity")
+                .value_name("f32")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("width")
+                .long("width")
+                .value_name("u32")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("height")
+                .long("height")
+                .value_name("u32")
+                .takes_value(true),
+        )
         .get_matches();
 
     let mut planet_spec = PlanetSpec::default();
     if matches.is_present("base_radius") {
-        value_t!(matches, "base_radius", f32).map(|v| planet_spec.base_radius = v).unwrap();
+        value_t!(matches, "base_radius", f32)
+            .map(|v| planet_spec.base_radius = v)
+            .unwrap();
     }
     if matches.is_present("deviation") {
-        value_t!(matches, "deviation", f32).map(|v| planet_spec.landscape_deviation = v).unwrap();
+        value_t!(matches, "deviation", f32)
+            .map(|v| planet_spec.landscape_deviation = v)
+            .unwrap();
     }
     if matches.is_present("num_octaves") {
-        value_t!(matches, "num_octaves", usize).map(|v| planet_spec.num_octaves = v).unwrap();
+        value_t!(matches, "num_octaves", usize)
+            .map(|v| planet_spec.num_octaves = v)
+            .unwrap();
     }
     if matches.is_present("persistence") {
-        value_t!(matches, "persistence", f32).map(|v| planet_spec.persistence = v).unwrap();
+        value_t!(matches, "persistence", f32)
+            .map(|v| planet_spec.persistence = v)
+            .unwrap();
     }
     if matches.is_present("wavelength") {
-        value_t!(matches, "wavelength", f32).map(|v| planet_spec.wavelength = v).unwrap();
+        value_t!(matches, "wavelength", f32)
+            .map(|v| planet_spec.wavelength = v)
+            .unwrap();
     }
     if matches.is_present("lacunarity") {
-        value_t!(matches, "lacunarity", f32).map(|v| planet_spec.lacunarity = v).unwrap();
+        value_t!(matches, "lacunarity", f32)
+            .map(|v| planet_spec.lacunarity = v)
+            .unwrap();
     }
 
     let mut width = 1024;
@@ -110,7 +138,9 @@ fn start_app() -> Result<()> {
         value_t!(matches, "width", u32).map(|v| width = v).unwrap();
     }
     if matches.is_present("height") {
-        value_t!(matches, "height", u32).map(|v| height = v).unwrap();
+        value_t!(matches, "height", u32)
+            .map(|v| height = v)
+            .unwrap();
     }
 
     let mut rng = rand::thread_rng();
@@ -126,8 +156,10 @@ fn start_app() -> Result<()> {
 
 fn main() {
     if let Err(err) = env_logger::init() {
-        println!("Could not initialize logger, exiting: {}",
-                 err.description());
+        println!(
+            "Could not initialize logger, exiting: {}",
+            err.description()
+        );
     } else {
         start_app().unwrap();
     }

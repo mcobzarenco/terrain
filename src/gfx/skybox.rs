@@ -35,17 +35,23 @@ impl<'a> SkyboxRenderer<'a> {
         let skybox_vertices: Vec<PlainVertex> =
             SKYBOX_VERTICES.iter().map(PlainVertex::from).collect();
         let skybox_indices: Vec<u32> = SKYBOX_INDICES.iter().cloned().collect();
-        let vertex_buffer = try!(VertexBuffer::new(window.facade(), &skybox_vertices)
-            .chain_err(|| "Cannot create vertex buffer."));
-        let index_buffer = try!(IndexBuffer::new(window.facade(),
-                                                 PrimitiveType::TrianglesList,
-                                                 &skybox_indices)
-            .chain_err(|| "Cannot create index buffer."));
+        let vertex_buffer = try!(
+            VertexBuffer::new(window.facade(), &skybox_vertices)
+                .chain_err(|| "Cannot create vertex buffer.")
+        );
+        let index_buffer = try!(
+            IndexBuffer::new(
+                window.facade(),
+                PrimitiveType::TrianglesList,
+                &skybox_indices,
+            ).chain_err(|| "Cannot create index buffer.")
+        );
 
         let perspective = perspective_matrix(window.aspect());
         Ok(SkyboxRenderer {
-            cubemap: try!(Cubemap::empty(window.facade(), 1024)
-                .chain_err(|| "Could not create cubemap texture.")),
+            cubemap: try!(Cubemap::empty(window.facade(), 1024).chain_err(
+                || "Could not create cubemap texture.",
+            )),
             draw_parameters: params,
             program: program,
             index_buffer: index_buffer,
@@ -55,28 +61,34 @@ impl<'a> SkyboxRenderer<'a> {
     }
 
     pub fn load<P>(&mut self, window: &Window, path: P) -> Result<()>
-        where P: AsRef<Path> + Debug
+    where
+        P: AsRef<Path> + Debug,
     {
         let instant = Instant::now();
-        let image = try!(image::open(path.as_ref())
-                .chain_err(|| format!("Could not load image at {:?}", path)))
-            .to_rgb();
+        let image = try!(image::open(path.as_ref()).chain_err(|| {
+            format!("Could not load image at {:?}", path)
+        })).to_rgb();
         info!("to_rgba - elapsed {:?}", instant.elapsed());
 
         let (width, height) = image.dimensions();
-        info!("Loaded Skybox asset with width={:?} height={:?} path={:?}",
-              width,
-              height,
-              path);
+        info!(
+            "Loaded Skybox asset with width={:?} height={:?} path={:?}",
+            width,
+            height,
+            path
+        );
         assert!((width / 4) as u32 == (height / 3) as u32);
         let step = (height / 3) as u32;
         info!("step: {}", step);
 
         let image = RawImage2d::from_raw_rgb(image.into_raw(), (width, height));
-        info!("RawImage2d::from_raw_rgba - elapsed {:?}",
-              instant.elapsed());
-        let source_tex = try!(Texture2d::new(window.facade(), image)
-            .chain_err(|| format!("Could not create texture from {:?}", path)));
+        info!(
+            "RawImage2d::from_raw_rgba - elapsed {:?}",
+            instant.elapsed()
+        );
+        let source_tex = try!(Texture2d::new(window.facade(), image).chain_err(|| {
+            format!("Could not create texture from {:?}", path)
+        }));
         info!("Texture2d::new() - elapsed {:?}", instant.elapsed());
 
 
@@ -94,10 +106,12 @@ impl<'a> SkyboxRenderer<'a> {
             height: step,
         };
         let cube_face = try!(self.surface_for_face(window, CubeLayer::PositiveY));
-        source_tex.as_surface().blit_color(&source_rect,
-                                           &cube_face,
-                                           &target_rect,
-                                           MagnifySamplerFilter::Linear);
+        source_tex.as_surface().blit_color(
+            &source_rect,
+            &cube_face,
+            &target_rect,
+            MagnifySamplerFilter::Linear,
+        );
         let source_rect = Rect {
             left: step,
             bottom: step,
@@ -105,10 +119,12 @@ impl<'a> SkyboxRenderer<'a> {
             height: step,
         };
         let cube_face = try!(self.surface_for_face(window, CubeLayer::PositiveZ));
-        source_tex.as_surface().blit_color(&source_rect,
-                                           &cube_face,
-                                           &target_rect,
-                                           MagnifySamplerFilter::Linear);
+        source_tex.as_surface().blit_color(
+            &source_rect,
+            &cube_face,
+            &target_rect,
+            MagnifySamplerFilter::Linear,
+        );
         let source_rect = Rect {
             left: step,
             bottom: step * 2,
@@ -116,10 +132,12 @@ impl<'a> SkyboxRenderer<'a> {
             height: step,
         };
         let cube_face = try!(self.surface_for_face(window, CubeLayer::NegativeY));
-        source_tex.as_surface().blit_color(&source_rect,
-                                           &cube_face,
-                                           &target_rect,
-                                           MagnifySamplerFilter::Linear);
+        source_tex.as_surface().blit_color(
+            &source_rect,
+            &cube_face,
+            &target_rect,
+            MagnifySamplerFilter::Linear,
+        );
         let source_rect = Rect {
             left: step * 2,
             bottom: step,
@@ -127,10 +145,12 @@ impl<'a> SkyboxRenderer<'a> {
             height: step,
         };
         let cube_face = try!(self.surface_for_face(window, CubeLayer::PositiveX));
-        source_tex.as_surface().blit_color(&source_rect,
-                                           &cube_face,
-                                           &target_rect,
-                                           MagnifySamplerFilter::Linear);
+        source_tex.as_surface().blit_color(
+            &source_rect,
+            &cube_face,
+            &target_rect,
+            MagnifySamplerFilter::Linear,
+        );
 
         let source_rect = Rect {
             left: step * 3,
@@ -139,10 +159,12 @@ impl<'a> SkyboxRenderer<'a> {
             height: step,
         };
         let cube_face = try!(self.surface_for_face(window, CubeLayer::NegativeZ));
-        source_tex.as_surface().blit_color(&source_rect,
-                                           &cube_face,
-                                           &target_rect,
-                                           MagnifySamplerFilter::Linear);
+        source_tex.as_surface().blit_color(
+            &source_rect,
+            &cube_face,
+            &target_rect,
+            MagnifySamplerFilter::Linear,
+        );
 
         let source_rect = Rect {
             left: 0,
@@ -151,10 +173,12 @@ impl<'a> SkyboxRenderer<'a> {
             height: step,
         };
         let cube_face = try!(self.surface_for_face(window, CubeLayer::NegativeX));
-        source_tex.as_surface().blit_color(&source_rect,
-                                           &cube_face,
-                                           &target_rect,
-                                           MagnifySamplerFilter::Linear);
+        source_tex.as_surface().blit_color(
+            &source_rect,
+            &cube_face,
+            &target_rect,
+            MagnifySamplerFilter::Linear,
+        );
         info!("Blit - elapsed {:?}", instant.elapsed());
 
         Ok(())
@@ -162,19 +186,23 @@ impl<'a> SkyboxRenderer<'a> {
 
     #[inline]
     pub fn render(&mut self, frame: &mut Frame, camera: &Camera) -> Result<()> {
-        let SkyboxRenderer { ref cubemap,
-                             ref draw_parameters,
-                             ref program,
-                             ref vertex_buffer,
-                             ref index_buffer,
-                             ref mut perspective,
-                             .. } = *self;
+        let SkyboxRenderer {
+            ref cubemap,
+            ref draw_parameters,
+            ref program,
+            ref vertex_buffer,
+            ref index_buffer,
+            ref mut perspective,
+            ..
+        } = *self;
 
         let frame_aspect = frame_aspect(frame);
         if perspective.aspect() != frame_aspect {
-            info!("Aspect ratio ({:?} -> {:?}) - recomputing perspective matrix.",
-                  perspective.aspect(),
-                  frame_aspect);
+            info!(
+                "Aspect ratio ({:?} -> {:?}) - recomputing perspective matrix.",
+                perspective.aspect(),
+                frame_aspect
+            );
             *perspective = perspective_matrix(frame_aspect);
         }
         // info!("New aspect{:?}", perspective.aspect());
@@ -184,19 +212,25 @@ impl<'a> SkyboxRenderer<'a> {
         let camera_position = Vec3f::from(camera.position().translation());
         // Matrix4f::from(*perspective.as_matrix())
         // perspective_matrix2(&frame),
-        let uniforms = uniform! {
+        let uniforms =
+            uniform! {
             camera_position: &camera_position,
             perspective: perspective_matrix2(&frame),
             view: view,
             skybox: cubemap.sampled().magnify_filter(MagnifySamplerFilter::Linear),
         };
 
-        try!(frame.draw(vertex_buffer,
-                  index_buffer,
-                  program,
-                  &uniforms,
-                  draw_parameters)
-            .chain_err(|| "Could not render skybox."));
+        try!(
+            frame
+                .draw(
+                    vertex_buffer,
+                    index_buffer,
+                    program,
+                    &uniforms,
+                    draw_parameters,
+                )
+                .chain_err(|| "Could not render skybox.")
+        );
 
         Ok(())
     }
@@ -227,10 +261,12 @@ fn perspective_matrix2(frame: &Frame) -> [[f32; 4]; 4] {
 
     let f = 1.0 / (fov / 2.0).tan();
 
-    [[f * aspect_ratio, 0.0, 0.0, 0.0],
-     [0.0, f, 0.0, 0.0],
-     [0.0, 0.0, (zfar + znear) / (zfar - znear), 1.0],
-     [0.0, 0.0, -(2.0 * zfar * znear) / (zfar - znear), 0.0]]
+    [
+        [f * aspect_ratio, 0.0, 0.0, 0.0],
+        [0.0, f, 0.0, 0.0],
+        [0.0, 0.0, (zfar + znear) / (zfar - znear), 1.0],
+        [0.0, 0.0, -(2.0 * zfar * znear) / (zfar - znear), 0.0],
+    ]
 }
 
 #[inline]

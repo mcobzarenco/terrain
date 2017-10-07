@@ -57,8 +57,10 @@ impl ScalarField3 for PlanetField {
     #[inline]
     fn value_at(&self, position: &Point3<CpuScalar>) -> CpuScalar {
         let (x, y, z) = (position[0], position[1], position[2]);
-        assert!(x.is_finite() && y.is_finite() && z.is_finite(),
-                format!("{} {} {}", x, y, z));
+        assert!(
+            x.is_finite() && y.is_finite() && z.is_finite(),
+            format!("{} {} {}", x, y, z)
+        );
         let PlanetField { ref seed, ref spec } = *self;
 
         let mut position = Vec3f::new(x, y, z);
@@ -81,7 +83,7 @@ impl ScalarField3 for PlanetField {
         if alpha > 0.45 && alpha < 0.55 {
             alpha = (alpha - 0.45) * 10.0;
             perturbation = alpha * mountains.apply(&self.seed, (position * 4.0).as_ref()) +
-                           (1.0 - alpha) * plains.apply(&self.seed, (position * 2.0).as_ref());
+                (1.0 - alpha) * plains.apply(&self.seed, (position * 2.0).as_ref());
         } else if alpha < 0.45 {
             perturbation = plains.apply(&self.seed, (position * 2.0).as_ref());
         } else {
@@ -107,17 +109,18 @@ pub struct PlanetRenderer<'a, 'b, Field: ScalarField3> {
 }
 
 impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
-    where Field: 'static + ScalarField3 + Send + Sync
+where
+    Field: 'static + ScalarField3 + Send + Sync,
 {
     pub fn new(scalar_field: Field, window: &Window, thread_pool: &'a ThreadPool) -> Result<Self> {
 
         let vertex_shader = try!(read_utf8_file(VERTEX_SHADER));
         let fragment_shader = try!(read_utf8_file(FRAGMENT_SHADER));
-        let program = try!(glium::Program::from_source(window.facade(),
-                                                       &vertex_shader,
-                                                       &fragment_shader,
-                                                       None)
-            .chain_err(|| "Could not compile the shaders."));
+        let program =
+            try!(
+                glium::Program::from_source(window.facade(), &vertex_shader, &fragment_shader, None)
+                    .chain_err(|| "Could not compile the shaders.")
+            );
 
         let scalar_field = Arc::new(scalar_field);
         let lod = LevelOfDetail::new(scalar_field.clone(), thread_pool, 12, 16.0, 32768.0, 10);
@@ -135,12 +138,18 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
         let mut physics_world = World::new();
         let ball = ShapeHandle::new(Ball::new(3.0 as CpuScalar));
         let ball_mass = 100.0;
-        let props = Some((ball_mass, ball.center_of_mass(), ball.angular_inertia(ball_mass)));
+        let props = Some((
+            ball_mass,
+            ball.center_of_mass(),
+            ball.angular_inertia(ball_mass),
+        ));
         let player_handle = physics_world.add_rigid_body(RigidBody::new(ball, props, 0.01, 2.0));
-        let player = Player::new(player_handle,
-                                 &(Point3::new(1.0, 1.0, 1.0) * 0.5e4),
-                                 &Point3::new(0.0, 0.0, 0.0),
-                                 &Vector3::y());
+        let player = Player::new(
+            player_handle,
+            &(Point3::new(1.0, 1.0, 1.0) * 0.5e4),
+            &Point3::new(0.0, 0.0, 0.0),
+            &Vector3::y(),
+        );
 
         Ok(PlanetRenderer {
             lod: lod,
@@ -153,18 +162,21 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
         })
     }
 
-    pub fn render(&mut self,
-                  window: &Window,
-                  frame: &mut Frame,
-                  camera: &mut Camera)
-                  -> Result<()> {
-        let PlanetRenderer { ref program,
-                             ref draw_parameters,
-                             ref mut lod,
-                             ref mut physics_world,
-                             ref mut physics_chunks,
-                             ref mut player,
-                             .. } = *self;
+    pub fn render(
+        &mut self,
+        window: &Window,
+        frame: &mut Frame,
+        camera: &mut Camera,
+    ) -> Result<()> {
+        let PlanetRenderer {
+            ref program,
+            ref draw_parameters,
+            ref mut lod,
+            ref mut physics_world,
+            ref mut physics_chunks,
+            ref mut player,
+            ..
+        } = *self;
 
         physics_world.set_gravity(player.observer.translation().normalize() * -9.60);
         // let new_camera = camera.position().translation() + player.position().translation() / 2.0;
@@ -181,7 +193,8 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
 
         let view = player.view_matrix();
         let light = Vec3f::new(-40.0f32, 0.0, -4000.0);
-        let uniforms = uniform! {
+        let uniforms =
+            uniform! {
             perspective: PlanetRenderer::<Field>::perspective_matrix(frame),
             model: PlanetRenderer::<Field>::model_matrix(),
             view: view,
@@ -201,19 +214,25 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
         // }
 
         for chunk in screen_chunks.into_iter() {
-            try!(frame.draw(&chunk.vertex_buffer,
-                      &chunk.index_buffer,
-                      program,
-                      &uniforms,
-                      draw_parameters)
-                .chain_err(|| "Could not render frame."));
+            try!(
+                frame
+                    .draw(
+                        &chunk.vertex_buffer,
+                        &chunk.index_buffer,
+                        program,
+                        &uniforms,
+                        draw_parameters,
+                    )
+                    .chain_err(|| "Could not render frame.")
+            );
 
             if !physics_chunks.contains_key(&chunk.uid) {
                 let handle = physics_world.add_rigid_body(RigidBody::new(
                     chunk.tri_mesh.clone(),
                     None,
                     0.1,
-                    1.0));
+                    1.0,
+                ));
                 physics_chunks.insert(chunk.uid, handle);
             }
             remove_set.remove(&chunk.uid);
@@ -246,10 +265,12 @@ impl<'a, 'b, Field> PlanetRenderer<'a, 'b, Field>
 
         let f = 1.0 / (fov / 2.0).tan();
 
-        [[f * aspect_ratio, 0.0, 0.0, 0.0],
-         [0.0, f, 0.0, 0.0],
-         [0.0, 0.0, (zfar + znear) / (zfar - znear), 1.0],
-         [0.0, 0.0, -(2.0 * zfar * znear) / (zfar - znear), 0.0]]
+        [
+            [f * aspect_ratio, 0.0, 0.0, 0.0],
+            [0.0, f, 0.0, 0.0],
+            [0.0, 0.0, (zfar + znear) / (zfar - znear), 1.0],
+            [0.0, 0.0, -(2.0 * zfar * znear) / (zfar - znear), 0.0],
+        ]
     }
 }
 
